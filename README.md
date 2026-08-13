@@ -49,17 +49,41 @@ flowchart TD
 cp .env.example .env
 # Edit .env with your OPENAI_API_KEY
 
-# Bootstrap (Windows)
+# Bootstrap (Windows) — sets UV_LINK_MODE=copy to avoid hardlink errors
 ./scripts/bootstrap.ps1
 
-# Or manually
-uv sync
+# Or manually (Windows: always use copy link mode)
+$env:UV_LINK_MODE = "copy"   # PowerShell
+uv sync --link-mode=copy
 docker compose up -d db redis
 uv run alembic upgrade head
 uv run python scripts/seed_demo.py
 uv run python scripts/ingest_kb.py
 uv run fastapi dev
 ```
+
+**Database URL:** local development uses PostgreSQL on host port **5433** (`localhost:5433`) so Docker does not conflict with a local Postgres on 5432. See `.env.example`.
+
+#### Windows notes
+
+On Windows, `uv` may fail with **os error 396** (*cloud operation incompatible with hardlinks*) when the project, `.venv`, or `%LOCALAPPDATA%\uv` cache is on a cloud-synced or filtered path. The bootstrap script sets `UV_LINK_MODE=copy` and uses `C:\uv-cache` by default when `UV_CACHE_DIR` is unset.
+
+If problems persist:
+
+- Prefer a local path such as `C:\dev\your-project` (outside OneDrive).
+- Or set `UV_PROJECT_ENVIRONMENT=C:\venvs\your-project` so `.venv` is not inside a synced folder.
+- Rebuild the environment: `Remove-Item -Recurse -Force .venv` then `uv sync --link-mode=copy`.
+
+#### Common issues
+
+| Symptom | Fix |
+|---------|-----|
+| Postgres auth failed on port 5432 | Use `localhost:5433` in `DATABASE_URL` (Docker maps `5433:5432`) |
+| `ProactorEventLoop` in seed/ingest scripts | Fixed in `scripts/` — use latest code; Windows needs `SelectorEventLoop` |
+| API fails on startup with `CREATE INDEX CONCURRENTLY` | Checkpointer pool needs `autocommit=True` in `app/graph/workflow.py` |
+| `fastapi dev` reload loop on `.venv` | Use `uv run fastapi run` or stop `uv sync` while server runs |
+
+Full troubleshooting: `.agents/skills/project-setup/` (also documented in [AGENTS.md](AGENTS.md)).
 
 API available at `http://localhost:8000`. Docs at `http://localhost:8000/docs`.
 

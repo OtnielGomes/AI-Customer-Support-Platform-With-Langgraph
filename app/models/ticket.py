@@ -49,11 +49,11 @@ class Ticket(Base):
     subject: Mapped[str] = mapped_column(String(500))
     description: Mapped[str] = mapped_column(Text)
     status: Mapped[TicketStatus] = mapped_column(
-        Enum(TicketStatus, name="ticket_status"),
+        Enum(TicketStatus, name="ticket_status", values_callable=lambda x: [e.value for e in x]),
         default=TicketStatus.OPEN,
     )
     intent: Mapped[TicketIntent | None] = mapped_column(
-        Enum(TicketIntent, name="ticket_intent"),
+        Enum(TicketIntent, name="ticket_intent", values_callable=lambda x: [e.value for e in x]),
         nullable=True,
     )
     escalated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

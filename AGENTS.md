@@ -61,6 +61,7 @@ Read the skill file **before** implementing in that domain. Skills under `.agent
 
 | Skill | Location | Invoke when |
 |-------|----------|-------------|
+| **project-setup** | `.agents/skills/project-setup/` | **First** for local dev setup, bootstrap, `.env`/Docker/ports, Windows fixes, migrations, seed, ingest, starting the API, or any cross-cutting infra change |
 | **ecosystem-primer** | `.agents/skills/ecosystem-primer/` | **First** for any LangChain/LangGraph/agent work — framework choice and next skill |
 | **fastapi** | `.agents/skills/fastapi/` | Routes, dependencies, Pydantic models, SSE streaming |
 | **langgraph-docs** | `.agents/skills/langgraph-docs/` | Graph design, multi-agent flows, HITL, checkpoints — fetch live docs via skill workflow |
@@ -70,6 +71,7 @@ Read the skill file **before** implementing in that domain. Skills under `.agent
 
 ### Recommended skill order by task
 
+0. **New clone / env error / bootstrap / infra** → `project-setup`
 1. **New agent or graph feature** → `ecosystem-primer` → `langgraph-docs` → `ai-engineer-components` rule
 2. **New API endpoint** → `fastapi` → `ai-engineer-components` rule
 3. **RAG / retrieval** → `ecosystem-primer` (RAG section) → implement in `app/retrieval/`
@@ -116,13 +118,46 @@ Copy from `.env.example` when present. Never commit secrets.
 
 | Variable | Purpose |
 |----------|---------|
-| `DATABASE_URL` | PostgreSQL (app + pgvector) |
+| `DATABASE_URL` | PostgreSQL (app + pgvector). **Local host:** `localhost:5433` (Docker maps `5433:5432` to avoid conflict with a local Postgres on 5432) |
 | `REDIS_URL` | Cache |
 | `OPENAI_API_KEY` (or provider equivalent) | LLM + embeddings |
 | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST` | Langfuse |
 | OTel exporter vars | OpenTelemetry backend |
 
 LangSmith vars (`LANGSMITH_*`) apply when using LangGraph Platform or LangSmith tracing alongside Langfuse.
+
+## Local development
+
+Read **`project-setup`** skill (`.agents/skills/project-setup/`) for the full bootstrap and troubleshooting guide.
+
+### Quick path (Windows)
+
+```powershell
+Copy-Item .env.example .env   # set OPENAI_API_KEY
+.\scripts\bootstrap.ps1
+uv run fastapi dev
+```
+
+### Quick path (Linux / macOS)
+
+```bash
+cp .env.example .env
+export UV_LINK_MODE=copy
+uv sync --link-mode=copy
+docker compose up -d db redis
+uv run alembic upgrade head
+uv run python scripts/seed_demo.py
+uv run python scripts/ingest_kb.py
+uv run fastapi dev
+```
+
+### Local dev invariants
+
+* **Postgres host port:** `5433` in `.env` / `.env.example`; Docker internal `db:5432` for the `api` service only.
+* **LangGraph checkpointer:** `AsyncConnectionPool` in `app/graph/workflow.py` must use `kwargs={"autocommit": True}` (migrations use `CREATE INDEX CONCURRENTLY`).
+* **StrEnum + PostgreSQL:** SQLAlchemy `Enum` columns need `values_callable=lambda x: [e.value for e in x]` so DB receives `open` not `OPEN`.
+* **Async scripts on Windows:** `scripts/seed_demo.py` and `scripts/ingest_kb.py` use `SelectorEventLoop` when `sys.platform == "win32"`.
+* **Hot reload:** If `fastapi dev` reloads on `.venv` changes, use `uv run fastapi run` or stop `uv sync` while the server is running.
 
 ## Commands
 

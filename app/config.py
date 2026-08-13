@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     app_env: str = "development"
     log_level: str = "INFO"
 
-    database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/support"
+    database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5433/support"
     redis_url: str = "redis://localhost:6379/0"
 
     openai_api_key: str = Field(default="", alias="OPENAI_API_KEY")

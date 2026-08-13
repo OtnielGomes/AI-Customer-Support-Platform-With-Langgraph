@@ -77,6 +77,7 @@ async def create_checkpointer() -> tuple[AsyncPostgresSaver, AsyncConnectionPool
         conninfo=settings.checkpoint_database_url(),
         max_size=10,
         open=False,
+        kwargs={"autocommit": True},
     )
     await pool.open()
     checkpointer = AsyncPostgresSaver(pool)

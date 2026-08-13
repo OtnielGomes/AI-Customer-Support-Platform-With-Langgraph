@@ -9,7 +9,7 @@ build/
 # Environment
 .env
 .env.local
-.AGENTS.md
+AGENTS.md
 skills-lock.json
 .cursor/
 .agents/
