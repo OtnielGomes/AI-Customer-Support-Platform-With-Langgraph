@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     otel_service_name: str = "ai-customer-support"
 
     supervisor_confidence_threshold: float = 0.7
+    cors_origins: str = ""
+
+    def parsed_cors_origins(self) -> list[str]:
+        """Parse CORS_ORIGINS as a comma-separated origin list."""
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
     @field_validator("database_url")
     @classmethod
@@ -48,20 +53,26 @@ class Settings(BaseSettings):
         return value
 
     def parsed_api_keys(self) -> dict[str, list[str]]:
-        """Parse API_KEYS into key -> scopes mapping."""
+        """Parse API_KEYS into key -> scopes mapping.
+
+        Format: ``key:scope1,scope2`` per entry. Multiple keys are separated by ``;``.
+        A key without ``:`` receives default scopes ``read`` and ``write``.
+
+        Example: ``dev-key:read,write,billing:write``
+        """
         mapping: dict[str, list[str]] = {}
         if not self.api_keys.strip():
             return mapping
-        for entry in self.api_keys.split(","):
+        for entry in self.api_keys.split(";"):
             entry = entry.strip()
             if not entry:
                 continue
-            if ":" in entry:
-                key, scopes_raw = entry.split(":", 1)
-                scopes = [s.strip() for s in scopes_raw.split(",") if s.strip()]
-            else:
-                key, scopes = entry, ["read", "write"]
-            mapping[key.strip()] = scopes
+            if ":" not in entry:
+                mapping[entry] = ["read", "write"]
+                continue
+            key, scopes_raw = entry.split(":", 1)
+            scopes = [scope.strip() for scope in scopes_raw.split(",") if scope.strip()]
+            mapping[key.strip()] = scopes or ["read", "write"]
         return mapping
 
     def langfuse_enabled(self) -> bool:

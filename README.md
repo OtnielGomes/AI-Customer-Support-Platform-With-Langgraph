@@ -12,6 +12,7 @@ Agent-centric customer support platform where a **supervisor** identifies ticket
 - **Observability:** OpenTelemetry, Langfuse
 - **Testing:** pytest, evaluation datasets
 - **Infrastructure:** Docker, Docker Compose, GitHub Actions
+- **Frontend:** Next.js (Customer Portal + Support Console in `web/`)
 
 ## Architecture
 
@@ -61,6 +62,21 @@ uv run python scripts/seed_demo.py
 uv run python scripts/ingest_kb.py
 uv run fastapi dev
 ```
+
+### Frontend
+
+```bash
+cp web/.env.example web/.env.local
+cd web
+npm install
+npm run dev
+```
+
+- Customer portal: http://localhost:3000
+- Support console: http://localhost:3000/login (default password `console`)
+- API docs: http://localhost:8000/docs
+
+The UI talks to FastAPI through a Next.js BFF (`/api/support/*`). The API key stays on the server.
 
 **Database URL:** local development uses PostgreSQL on host port **5433** (`localhost:5433`) so Docker does not conflict with a local Postgres on 5432. See `.env.example`.
 

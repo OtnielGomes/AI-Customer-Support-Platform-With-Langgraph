@@ -7,7 +7,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from app.api.exceptions import register_exception_handlers
+from app.api.routes.analytics import router as analytics_router
+from app.api.routes.escalations import router as escalations_router
 from app.api.routes.health import router as health_router
+from app.api.routes.runs import router as runs_router
 from app.api.routes.tickets import router as tickets_router
 
 
@@ -18,6 +21,9 @@ def client() -> TestClient:
     register_exception_handlers(app)
     app.include_router(health_router)
     app.include_router(tickets_router)
+    app.include_router(escalations_router)
+    app.include_router(runs_router)
+    app.include_router(analytics_router)
 
     mock_graph = AsyncMock()
     mock_graph.ainvoke = AsyncMock(

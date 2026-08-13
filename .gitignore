@@ -26,3 +26,9 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# Node / Next.js
+node_modules/
+web/.next/
+web/out/
+web/.turbo/

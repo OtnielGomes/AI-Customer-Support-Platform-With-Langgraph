@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f4efe6;
+  --ink: #1c1915;
+  --muted: #6b6459;
+  --line: #d9d0c3;
+  --card: #fffdf8;
+  --accent: #c45c26;
+  --accent-ink: #fff7ef;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+input,
+textarea,
+select,
+button {
+  font: inherit;
+}

@@ -49,5 +49,19 @@ services:
       retries: 10
       start_period: 30s
 
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      SUPPORT_API_URL: http://api:8000
+      SUPPORT_API_KEY: ${SUPPORT_API_KEY:-dev-key}
+      CONSOLE_PASSWORD: ${CONSOLE_PASSWORD:-console}
+    depends_on:
+      api:
+        condition: service_healthy
+
 volumes:
   pgdata:

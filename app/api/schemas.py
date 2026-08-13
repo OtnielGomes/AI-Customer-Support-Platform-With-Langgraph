@@ -7,6 +7,7 @@ from typing import Any
 from langchain_core.messages import HumanMessage
 from pydantic import BaseModel, Field
 
+from app.models.agent_run import AgentEventType, AgentRunStatus
 from app.models.ticket import TicketIntent, TicketStatus
 
 
@@ -40,6 +41,19 @@ class ResolveRequest(BaseModel):
         ]
 
 
+class EscalationReplyRequest(BaseModel):
+    """Human agent reply that resumes an interrupted graph."""
+
+    answer: str = Field(min_length=1, max_length=10000)
+    agent: str = Field(default="human", max_length=255)
+
+
+class CloseTicketRequest(BaseModel):
+    """Request to close a ticket without resuming the graph."""
+
+    reason: str | None = Field(default=None, max_length=2000)
+
+
 class ResolutionResponse(BaseModel):
     """Graph resolution result."""
 
@@ -48,8 +62,11 @@ class ResolutionResponse(BaseModel):
     intent: str | None = None
     confidence: float | None = None
     escalated: bool = False
+    awaiting_human: bool = False
+    run_id: uuid.UUID | None = None
     tool_results: list[dict[str, Any]] = Field(default_factory=list)
     retrieved_context: list[dict[str, Any]] = Field(default_factory=list)
+    interrupt_payload: dict[str, Any] | None = None
 
 
 class TicketResponse(BaseModel):
@@ -57,6 +74,8 @@ class TicketResponse(BaseModel):
 
     id: uuid.UUID
     customer_id: uuid.UUID
+    customer_email: str | None = None
+    customer_name: str | None = None
     subject: str
     description: str
     status: TicketStatus
@@ -64,6 +83,111 @@ class TicketResponse(BaseModel):
     escalated_at: datetime | None = None
     resolution: str | None = None
     escalated: bool = False
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class TicketSummary(BaseModel):
+    """Ticket row for list views."""
+
+    id: uuid.UUID
+    customer_id: uuid.UUID
+    customer_email: str | None = None
+    customer_name: str | None = None
+    subject: str
+    status: TicketStatus
+    intent: TicketIntent | None = None
+    escalated: bool = False
+    escalated_at: datetime | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class TicketListResponse(BaseModel):
+    """Paginated ticket list."""
+
+    items: list[TicketSummary]
+    total: int
+    limit: int
+    offset: int
+
+
+class AgentRunResponse(BaseModel):
+    """Persisted graph invocation."""
+
+    id: uuid.UUID
+    ticket_id: uuid.UUID
+    thread_id: str
+    status: AgentRunStatus
+    intent: str | None = None
+    confidence: float | None = None
+    escalated: bool = False
+    total_latency_ms: float | None = None
+    error: str | None = None
+    created_at: datetime
+
+
+class AgentRunListResponse(BaseModel):
+    """List of agent runs for a ticket."""
+
+    items: list[AgentRunResponse]
+
+
+class AgentEventResponse(BaseModel):
+    """Persisted execution event."""
+
+    id: uuid.UUID
+    run_id: uuid.UUID
+    sequence: int
+    event_type: AgentEventType
+    name: str
+    input: dict[str, Any] | None = None
+    output: dict[str, Any] | None = None
+    latency_ms: float | None = None
+    error: str | None = None
+    created_at: datetime
+
+
+class AgentEventListResponse(BaseModel):
+    """Events belonging to one agent run."""
+
+    items: list[AgentEventResponse]
+
+
+class VolumePoint(BaseModel):
+    """Daily ticket volume."""
+
+    date: str
+    count: int
+
+
+class AnalyticsOverviewResponse(BaseModel):
+    """Aggregate ticket metrics for the console."""
+
+    total_tickets: int
+    by_status: dict[str, int]
+    by_intent: dict[str, int]
+    escalation_rate: float
+    avg_confidence: float | None = None
+    avg_resolution_ms: float | None = None
+    volume_by_day: list[VolumePoint] = Field(default_factory=list)
+
+
+class ToolAnalyticsItem(BaseModel):
+    """Per-tool usage and latency."""
+
+    name: str
+    calls: int
+    errors: int
+    error_rate: float
+    avg_latency_ms: float | None = None
+    p95_latency_ms: float | None = None
+
+
+class AnalyticsToolsResponse(BaseModel):
+    """Tool analytics payload."""
+
+    items: list[ToolAnalyticsItem]
 
 
 class HealthResponse(BaseModel):

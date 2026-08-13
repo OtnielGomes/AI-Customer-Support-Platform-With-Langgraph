@@ -7,7 +7,8 @@ Guide for Cursor agents working on this repository. Read this file first for con
 Agent-centric customer support platform: a **supervisor** classifies ticket intent, delegates to **domain agents** (billing, logistics, account), lets agents call **authorized tools** and **RAG** over a knowledge base, and **escalates to humans** when automation cannot resolve the case.
 
 **Repository:** `AI-Customer-Support-Platform-With-Langgraph`  
-**App package:** `app/` (Python backend only — no frontend in current scope)
+**Backend package:** `app/` (Python / FastAPI).  
+**Frontend:** Next.js App Router in [`web/`](web/) (Customer Portal + Support Console). Never put Next.js inside the Python `app/` package.
 
 ## Tech stack
 
@@ -22,6 +23,7 @@ Agent-centric customer support platform: a **supervisor** classifies ticket inte
 | Observability | OpenTelemetry, Langfuse |
 | Testing | pytest, evaluation datasets |
 | Infrastructure | Docker, Docker Compose, GitHub Actions |
+| Frontend | Next.js 16.3 + React (App Router in `web/`) — `vercel-react-best-practices`; verify runtime with `next-dev-loop` |
 
 ## Directory structure
 
@@ -37,16 +39,18 @@ app/
 ├── security/            # authentication, authorization, permissions, guardrails
 ├── evaluation/          # datasets/, evaluators.py, metrics.py
 ├── observability/       # logging, tracing, metrics
-├── models/              # ticket, customer, resolution
+├── models/              # ticket, customer, resolution, agent_run
+├── services/            # ticket listing, graph runner, analytics
 └── config.py
 
+web/                     # Next.js Customer Portal + Support Console
 tests/                   # unit/, integration/, evaluation/
 data/knowledge_base/     # source documents for RAG
 docker/                  # container assets
 scripts/                 # dev and ops helpers
 ```
 
-**Do not** introduce alternate layouts (`services/`, `graphs/`, `api/routers/`, `schemas/` as top-level packages) unless the team explicitly changes this map.
+**Do not** introduce alternate Python layouts (`services/`, `graphs/`, `api/routers/`, `schemas/` as top-level packages) unless the team explicitly changes this map. The Next.js UI lives in **`web/`**, a sibling of the Python `app/` package.
 
 ## Cursor rules
 
@@ -54,10 +58,21 @@ scripts/                 # dev and ops helpers
 |------|-------|---------|
 | `ai-engineer-standards.mdc` | Always | Python, stack, architecture, skill order |
 | `ai-engineer-components.mdc` | `app/**`, `tests/**` | Layer map, LangGraph, API, RAG, testing |
+| `frontend-next.mdc` | `*.tsx`, `*.jsx`, `web/**`, `frontend/**` | Next.js/React — load Vercel + next-dev-loop skills |
 
 ## Installed skills — when to invoke
 
-Read the skill file **before** implementing in that domain. Skills under `.agents/skills/` are project-local; Langfuse is enabled via Cursor plugin.
+Read the skill file **before** implementing in that domain. Do not implement LangGraph, FastAPI, Langfuse, or Next.js patterns from memory.
+
+**Where skills live**
+
+| Scope | Path | Notes |
+|-------|------|--------|
+| Project (CLI lockfile) | `.agents/skills/` | Installed via `npx skills add`; hashes in `skills-lock.json` |
+| Project (Cursor) | `.cursor/skills/` | Hand-authored / packaged Cursor skills |
+| Plugin | Cursor plugin | Langfuse — enabled in `.cursor/settings.json` |
+
+This file (`AGENTS.md` at repo root) is the **project** agent guide. Do not confuse it with `.agents/skills/vercel-react-best-practices/AGENTS.md` (compiled Vercel React rules).
 
 | Skill | Location | Invoke when |
 |-------|----------|-------------|
@@ -66,8 +81,12 @@ Read the skill file **before** implementing in that domain. Skills under `.agent
 | **fastapi** | `.agents/skills/fastapi/` | Routes, dependencies, Pydantic models, SSE streaming |
 | **langgraph-docs** | `.agents/skills/langgraph-docs/` | Graph design, multi-agent flows, HITL, checkpoints — fetch live docs via skill workflow |
 | **langgraph-cli** | `.agents/skills/langgraph-cli/` | `langgraph.json`, `langgraph dev/build/up`, local Docker lifecycle |
+| **vercel-react-best-practices** | `.agents/skills/vercel-react-best-practices/` | Writing, reviewing, or refactoring React/Next.js — then load matching files under that skill's `rules/` |
+| **next-dev-loop** | `.agents/skills/next-dev-loop/` | After UI edits, with `next dev` running — verify runtime via `/_next/mcp` + `agent-browser` (compile/type-check is not enough) |
 | **langfuse** | Cursor plugin (`langfuse` enabled in `.cursor/settings.json`) | Tracing, scores, datasets, prompt management, trace debugging |
-| **skill-creator** | `.cursor/skills/skill-creator/` | Creating or benchmarking new Cursor skills for this project |
+| **skill-creator** | `.cursor/skills/skill-creator/` | Creating, editing, or benchmarking Cursor skills for this project |
+
+`skills-lock.json` currently pins: `ecosystem-primer`, `fastapi`, `langgraph-cli`, `langgraph-docs`, `next-dev-loop`, `vercel-react-best-practices`. `project-setup` is project-authored (not in the lockfile).
 
 ### Recommended skill order by task
 
@@ -78,6 +97,8 @@ Read the skill file **before** implementing in that domain. Skills under `.agent
 4. **Observability** → Langfuse skill + `app/observability/`
 5. **Evaluations** → `app/evaluation/` + Langfuse datasets; pytest in `tests/evaluation/`
 6. **Docker / deploy** → `langgraph-cli` if using LangGraph Platform; otherwise `docker-compose.yml`
+7. **React / Next.js UI** → `vercel-react-best-practices` (then the relevant `rules/*.md`) → with `next dev` running, `next-dev-loop`
+8. **New or improved Cursor skill** → `skill-creator`
 
 ## Development conventions
 
@@ -112,6 +133,15 @@ Read the skill file **before** implementing in that domain. Skills under `.agent
 * OTel: `app/observability/tracing.py` — propagate context into graph invocations.
 * Langfuse: trace LLM calls, tool runs, and evaluation runs; link traces to `ticket_id` when possible.
 
+### Frontend (`web/`)
+
+* Next.js 16.3 App Router + React. FastAPI remains the API and graph entry.
+* Browser clients talk to `web/app/api/support/[...path]` (BFF). The BFF injects `X-API-Key` from `SUPPORT_API_KEY` — never `NEXT_PUBLIC_`.
+* Customer Portal: `/` (new ticket), `/tickets/[id]` (status + SSE chat).
+* Support Console: `/console/tickets`, `/console/escalations`, `/console/analytics` (cookie login at `/login`).
+* Write/review UI with `vercel-react-best-practices` (load only the matching `rules/*.md`).
+* After edits, if `next dev` is running, verify with `next-dev-loop` — not compile/type-check alone.
+
 ## Environment variables (typical)
 
 Copy from `.env.example` when present. Never commit secrets.
@@ -124,7 +154,15 @@ Copy from `.env.example` when present. Never commit secrets.
 | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST` | Langfuse |
 | OTel exporter vars | OpenTelemetry backend |
 
-LangSmith vars (`LANGSMITH_*`) apply when using LangGraph Platform or LangSmith tracing alongside Langfuse.
+| `CORS_ORIGINS` | Optional comma-separated browser origins (empty when using the Next.js BFF) |
+
+Frontend (`web/.env.local`, copy from `web/.env.example`):
+
+| Variable | Purpose |
+|----------|---------|
+| `SUPPORT_API_URL` | FastAPI base URL (`http://localhost:8000` locally, `http://api:8000` in Compose) |
+| `SUPPORT_API_KEY` | Server-only API key matching `API_KEYS` |
+| `CONSOLE_PASSWORD` | Support Console login |
 
 ## Local development
 
@@ -136,6 +174,9 @@ Read **`project-setup`** skill (`.agents/skills/project-setup/`) for the full bo
 Copy-Item .env.example .env   # set OPENAI_API_KEY
 .\scripts\bootstrap.ps1
 uv run fastapi dev
+# In another terminal: the Next.js UI
+Copy-Item web\.env.example web\.env.local
+cd web; npm install; npm run dev
 ```
 
 ### Quick path (Linux / macOS)
@@ -149,6 +190,7 @@ uv run alembic upgrade head
 uv run python scripts/seed_demo.py
 uv run python scripts/ingest_kb.py
 uv run fastapi dev
+# UI: cp web/.env.example web/.env.local && cd web && npm install && npm run dev
 ```
 
 ### Local dev invariants
@@ -170,8 +212,11 @@ pytest tests/unit
 pytest tests/integration
 pytest tests/evaluation
 
-# Docker
-docker compose up --build
+# Frontend
+cd web
+npm run dev          # http://localhost:3000
+npm run build
+npm run typecheck
 ```
 
 For LangGraph CLI workflows, see `langgraph-cli` skill (`langgraph dev`, `langgraph up`, etc.).
@@ -193,7 +238,8 @@ Evaluation code lives in `app/evaluation/`; pytest wrappers in `tests/evaluation
 * Skip guardrails or permission checks for tool execution.
 * Bypass supervisor routing for domain-specific logic.
 * Use `print` for operational logging.
-* Implement from memory for Langfuse or LangGraph APIs — use skills and live docs.
+* Implement from memory for Langfuse, LangGraph, FastAPI, or Next.js APIs — use skills and live docs.
+* Treat TypeScript compile or type-check as sufficient verification of a running Next.js app — use `next-dev-loop` when `next dev` is up.
 
 ## Language
 

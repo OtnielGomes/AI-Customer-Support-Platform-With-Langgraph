@@ -3,6 +3,8 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from app.security.authorization import AuthorizationError
+
 
 class DomainError(Exception):
     """Base domain error."""
@@ -20,12 +22,32 @@ class TicketNotFoundError(DomainError):
         super().__init__(f"Ticket not found: {ticket_id}", status_code=404)
 
 
+class RunNotFoundError(DomainError):
+    """Agent run not found."""
+
+    def __init__(self, run_id: str) -> None:
+        super().__init__(f"Agent run not found: {run_id}", status_code=404)
+
+
+class TicketConflictError(DomainError):
+    """Ticket is not in a valid state for the requested action."""
+
+    def __init__(self, ticket_id: str, message: str) -> None:
+        super().__init__(f"{message}: {ticket_id}", status_code=409)
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Register global exception handlers."""
 
     @app.exception_handler(DomainError)
     async def domain_error_handler(_request: Request, exc: DomainError) -> JSONResponse:
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.message})
+
+    @app.exception_handler(AuthorizationError)
+    async def authorization_error_handler(
+        _request: Request, exc: AuthorizationError
+    ) -> JSONResponse:
+        return JSONResponse(status_code=403, content={"detail": str(exc)})
 
     @app.exception_handler(Exception)
     async def generic_error_handler(_request: Request, exc: Exception) -> JSONResponse:

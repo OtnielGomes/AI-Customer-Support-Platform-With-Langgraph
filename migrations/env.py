@@ -9,7 +9,7 @@ from app.config import get_settings
 from app.persistence import Base
 
 # Import models so metadata is populated
-from app.models import Customer, KBChunk, Resolution, Ticket  # noqa: F401
+from app.models import AgentEvent, AgentRun, Customer, KBChunk, Resolution, Ticket  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:

@@ -3,7 +3,7 @@
 import logging
 from typing import Any
 
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
 
 from app.agents.account import run_account_agent
 from app.agents.billing import run_billing_agent
@@ -77,10 +77,46 @@ async def account_node(state: SupportState) -> dict[str, Any]:
 
 
 async def escalation_node(state: SupportState) -> dict[str, Any]:
-    """Escalate to human support."""
+    """Pause for a human agent, then apply their reply as the draft answer.
+
+    ``interrupt()`` suspends the graph until ``Command(resume=...)`` is sent
+    with the same ``thread_id``. On resume the node restarts from the top;
+    ``interrupt()`` then returns the human payload.
+    """
+    from langgraph.types import interrupt
+
     with record_node_latency("escalation"):
         reason = state.get("draft_answer") or "Low confidence or unresolved issue"
-        return await run_escalation_agent(reason=reason, draft_answer=state.get("draft_answer"))
+        prepared = await run_escalation_agent(
+            reason=reason,
+            draft_answer=state.get("draft_answer"),
+        )
+        payload = {
+            "ticket_id": state.get("ticket_id"),
+            "intent": state.get("intent"),
+            "confidence": state.get("confidence"),
+            "reason": reason,
+            "draft_answer": prepared.get("draft_answer"),
+        }
+        human = interrupt(payload)
+        answer = _human_answer(human) or prepared.get("draft_answer") or reason
+        return {
+            "needs_human": False,
+            "draft_answer": answer,
+            "messages": [AIMessage(content=answer)],
+        }
+
+
+def _human_answer(human: Any) -> str | None:
+    """Extract the free-text answer from a resume payload."""
+    if human is None:
+        return None
+    if isinstance(human, str):
+        return human
+    if isinstance(human, dict):
+        answer = human.get("answer") or human.get("draft_answer")
+        return str(answer) if answer else None
+    return str(human)
 
 
 async def output_guardrails_node(state: SupportState) -> dict[str, Any]:

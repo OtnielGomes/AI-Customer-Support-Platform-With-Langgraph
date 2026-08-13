@@ -12,6 +12,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.persistence import Base
 
 if TYPE_CHECKING:
+    from app.models.agent_run import AgentRun
     from app.models.customer import Customer
     from app.models.resolution import Resolution
 
@@ -69,3 +70,4 @@ class Ticket(Base):
 
     customer: Mapped["Customer"] = relationship(back_populates="tickets")
     resolution: Mapped["Resolution | None"] = relationship(back_populates="ticket", uselist=False)
+    agent_runs: Mapped[list["AgentRun"]] = relationship(back_populates="ticket")
