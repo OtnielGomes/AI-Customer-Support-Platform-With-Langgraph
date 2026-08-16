@@ -4,9 +4,12 @@ import re
 
 INJECTION_PATTERNS = [
     r"ignore\s+previous\s+instructions",
+    r"ignore\s+a\s+pol",
     r"disregard\s+all",
     r"system\s+prompt",
     r"you\s+are\s+now",
+    r"eu\s+sou\s+administrador",
+    r"i\s+am\s+(an?\s+)?admin",
 ]
 
 REFUND_CLAIM_PATTERN = re.compile(
@@ -35,10 +38,14 @@ def sanitize_input(text: str) -> str:
     return cleaned
 
 
-def validate_output(text: str, refund_tool_success: bool = False) -> str:
+def validate_output(
+    text: str,
+    refund_tool_success: bool = False,
+    refund_executed: bool = False,
+) -> str:
     """Validate model output before returning to user."""
-    if REFUND_CLAIM_PATTERN.search(text) and not refund_tool_success:
-        raise GuardrailViolation("Output claims refund without successful tool execution")
+    if REFUND_CLAIM_PATTERN.search(text) and not refund_executed:
+        raise GuardrailViolation("Output claims refund without executed refund")
     if len(text) > 20000:
         raise GuardrailViolation("Output exceeds maximum length")
     return text

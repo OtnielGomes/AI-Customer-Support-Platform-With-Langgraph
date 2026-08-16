@@ -132,6 +132,7 @@ async def resolve_ticket(
     """Resolve a ticket using the support graph."""
     authorize_route(principal, ["write"])
     ticket = await ticket_service.get_ticket_or_404(session, ticket_id)
+    _reject_closed_ticket(ticket)
     ticket.status = TicketStatus.IN_PROGRESS
     await session.flush()
 
@@ -176,6 +177,7 @@ async def stream_ticket_resolution(
     """Stream graph execution via Server-Sent Events and persist the result."""
     authorize_route(principal, ["write"])
     ticket = await ticket_service.get_ticket_or_404(session, ticket_id)
+    _reject_closed_ticket(ticket)
     ticket.status = TicketStatus.IN_PROGRESS
     await session.flush()
 
@@ -272,6 +274,19 @@ async def close_ticket(
     return ticket_service.ticket_to_response(ticket)
 
 
+@router.post("/{ticket_id}/confirm", response_model=TicketResponse)
+async def confirm_ticket(
+    ticket_id: uuid.UUID,
+    session: SessionDep,
+    principal: PrincipalDep,
+) -> TicketResponse:
+    """Customer confirms the assistant's answer resolved the issue."""
+    authorize_route(principal, ["write"])
+    ticket = await ticket_service.get_ticket_or_404(session, ticket_id)
+    ticket = await ticket_service.confirm_resolution(session, ticket)
+    return ticket_service.ticket_to_response(ticket)
+
+
 @router.get("/{ticket_id}/runs", response_model=AgentRunListResponse)
 async def list_ticket_runs(
     ticket_id: uuid.UUID,
@@ -295,6 +310,12 @@ def _graph_payload(ticket: Ticket, body: ResolveRequest, scopes: list[str]) -> d
         "messages": messages,
         "principal_scopes": scopes,
     }
+
+
+def _reject_closed_ticket(ticket: Ticket) -> None:
+    """Prevent graph runs on archived tickets."""
+    if ticket.status == TicketStatus.CLOSED:
+        raise TicketConflictError(str(ticket.id), "Ticket is closed")
 
 
 async def _snapshot_result(graph, config: dict, error: str | None) -> dict:

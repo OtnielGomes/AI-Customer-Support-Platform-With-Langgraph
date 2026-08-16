@@ -25,6 +25,7 @@ export function TicketDetail({
   events: AgentEventResponse[];
 }) {
   const [tab, setTab] = useState<Tab>("conversation");
+  const [closeError, setCloseError] = useState<string | null>(null);
 
   return (
     <div className="grid gap-6">
@@ -67,15 +68,27 @@ export function TicketDetail({
             </div>
           ) : null}
           {ticket.status !== "closed" ? (
-            <form action={closeTicketAction.bind(null, ticket.id)} className="mt-2 flex gap-2">
-              <input
-                name="reason"
-                placeholder="Close reason (optional)"
-                className="flex-1 rounded-lg border border-white/10 bg-[#12151a] px-3 py-2 text-sm"
-              />
-              <button type="submit" className="rounded-lg bg-white/10 px-4 py-2 text-sm">
-                Close ticket
-              </button>
+            <form
+              className="mt-2 grid gap-2"
+              action={async (formData) => {
+                setCloseError(null);
+                const result = await closeTicketAction(ticket.id, formData);
+                if (result?.error) {
+                  setCloseError(result.error);
+                }
+              }}
+            >
+              <div className="flex gap-2">
+                <input
+                  name="reason"
+                  placeholder="Close reason (optional)"
+                  className="flex-1 rounded-lg border border-white/10 bg-[#12151a] px-3 py-2 text-sm"
+                />
+                <button type="submit" className="rounded-lg bg-white/10 px-4 py-2 text-sm">
+                  Close ticket
+                </button>
+              </div>
+              {closeError ? <p className="text-sm text-rose-300">{closeError}</p> : null}
             </form>
           ) : null}
         </section>

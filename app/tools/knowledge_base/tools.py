@@ -1,32 +1,33 @@
 """Knowledge base search tool."""
 
-from contextvars import ContextVar
 from typing import Any
 
 from langchain_core.tools import tool
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.retrieval.retriever import KnowledgeRetriever
-
-_session_ctx: ContextVar[AsyncSession | None] = ContextVar("kb_session", default=None)
-_retriever_ctx: ContextVar[KnowledgeRetriever | None] = ContextVar("kb_retriever", default=None)
+from app.tools.context import ToolContext, get_tool_context, set_tool_context
 
 
 def set_kb_context(session: AsyncSession, retriever: KnowledgeRetriever) -> None:
-    """Set async context for KB tool execution."""
-    _session_ctx.set(session)
-    _retriever_ctx.set(retriever)
+    """Set KB/session context, preserving an existing customer binding."""
+    current = get_tool_context()
+    if current is None:
+        set_tool_context(ToolContext(session=session, retriever=retriever))
+        return
+    current.session = session
+    current.retriever = retriever
+    set_tool_context(current)
 
 
 @tool
 async def search_knowledge_base(query: str, domain: str = "billing") -> list[dict[str, Any]]:
     """Search the knowledge base for relevant policy and FAQ content."""
-    session = _session_ctx.get()
-    retriever = _retriever_ctx.get()
-    if session is None or retriever is None:
+    context = get_tool_context()
+    if context is None or context.retriever is None:
         return [{"error": "Knowledge base context not configured"}]
 
-    chunks = await retriever.search(session, query=query, domain=domain, top_k=3)
+    chunks = await context.retriever.search(context.session, query=query, domain=domain, top_k=3)
     return [
         {
             "content": chunk.content,

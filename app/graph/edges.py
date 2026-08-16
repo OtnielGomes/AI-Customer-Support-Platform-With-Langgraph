@@ -32,6 +32,9 @@ def route_after_worker(state: SupportState) -> Literal["resolution", "escalation
     """Route to resolution or escalation after domain worker."""
     if state.get("needs_human"):
         return "escalation"
+    decision = state.get("policy_decision") or {}
+    if isinstance(decision, dict) and decision.get("requires_human"):
+        return "escalation"
     return "resolution"
 
 

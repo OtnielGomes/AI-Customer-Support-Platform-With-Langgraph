@@ -185,8 +185,9 @@ async def persist_graph_result(
         ticket.escalated_at = ticket.escalated_at or datetime.now(UTC)
     elif error:
         ticket.status = TicketStatus.OPEN
-    else:
-        ticket.status = TicketStatus.RESOLVED
+    elif ticket.status != TicketStatus.CLOSED:
+        # Keep the conversation open until the customer or an agent confirms.
+        ticket.status = TicketStatus.IN_PROGRESS
 
     if interrupt_payload:
         answer = (
@@ -236,24 +237,31 @@ async def close_ticket(session: AsyncSession, ticket: Ticket, reason: str | None
     was_escalated = ticket.status == TicketStatus.ESCALATED
     ticket.status = TicketStatus.CLOSED
     if reason:
-        existing = await session.execute(
-            select(Resolution).where(Resolution.ticket_id == ticket.id)
-        )
-        resolution = existing.scalar_one_or_none()
         note = f"Closed by agent. {reason}"
-        if resolution is None:
-            session.add(
-                Resolution(
-                    ticket_id=ticket.id,
-                    answer=note,
-                    escalated=was_escalated,
-                    confidence=None,
-                )
+        if ticket.resolution is None:
+            ticket.resolution = Resolution(
+                ticket_id=ticket.id,
+                answer=note,
+                escalated=was_escalated,
+                confidence=None,
             )
         else:
-            resolution.answer = f"{resolution.answer}\n\n{note}"
+            ticket.resolution.answer = f"{ticket.resolution.answer}\n\n{note}"
     await session.flush()
-    return ticket
+    # Re-load relationships: flush expires `updated_at` (onupdate) and lazy IO
+    # in `ticket_to_response` raises MissingGreenlet under AsyncSession.
+    return await get_ticket_or_404(session, ticket.id)
+
+
+async def confirm_resolution(session: AsyncSession, ticket: Ticket) -> Ticket:
+    """Mark a ticket resolved after the customer confirms the answer helped."""
+    if ticket.status == TicketStatus.CLOSED:
+        raise TicketConflictError(str(ticket.id), "Ticket is already closed")
+    if ticket.status == TicketStatus.RESOLVED:
+        return ticket
+    ticket.status = TicketStatus.RESOLVED
+    await session.flush()
+    return await get_ticket_or_404(session, ticket.id)
 
 
 async def list_runs(session: AsyncSession, ticket_id: uuid.UUID) -> list[AgentRun]:

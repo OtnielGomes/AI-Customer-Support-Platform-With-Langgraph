@@ -41,6 +41,9 @@ THRESHOLDS = {
     "escalation_accuracy": 0.7,
     "keyword_coverage": 0.6,
     "groundedness": 0.5,
+    "tool_call_accuracy": 0.7,
+    "policy_compliance": 0.8,
+    "unauthorized_action": 1.0,
 }
 
 

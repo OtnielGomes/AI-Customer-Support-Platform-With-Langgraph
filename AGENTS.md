@@ -32,22 +32,26 @@ app/
 ├── api/
 │   ├── routes/          # tickets.py, health.py
 │   └── dependencies.py  # auth, DB, graph, Redis
-├── agents/              # supervisor, billing, logistics, account, escalation
+├── agents/              # supervisor, billing, logistics, account, escalation, tool_loop
 ├── graph/               # state, nodes, edges, workflow
 ├── tools/               # billing/, logistics/, account/, knowledge_base/
+├── policies/            # deterministic policy engine (yaml + rules)
+├── synthetic/           # NexaCommerce world generator
 ├── retrieval/           # embeddings, retriever, reranker
 ├── security/            # authentication, authorization, permissions, guardrails
 ├── evaluation/          # datasets/, evaluators.py, metrics.py
 ├── observability/       # logging, tracing, metrics
-├── models/              # ticket, customer, resolution, agent_run
+├── models/              # ticket, customer, order, payment, shipment, refund, ...
 ├── services/            # ticket listing, graph runner, analytics
 └── config.py
 
 web/                     # Next.js Customer Portal + Support Console
 tests/                   # unit/, integration/, evaluation/
-data/knowledge_base/     # source documents for RAG
+data/company/            # company.yaml world model
+data/fixtures/           # SCN-* evaluation fixtures
+data/knowledge_base/     # policies, procedures, faq (RAG documents only)
 docker/                  # container assets
-scripts/                 # dev and ops helpers
+scripts/                 # generate_data.py, seed_demo.py, ingest_kb.py
 ```
 
 **Do not** introduce alternate Python layouts (`services/`, `graphs/`, `api/routers/`, `schemas/` as top-level packages) unless the team explicitly changes this map. The Next.js UI lives in **`web/`**, a sibling of the Python `app/` package.
@@ -85,20 +89,24 @@ This file (`AGENTS.md` at repo root) is the **project** agent guide. Do not conf
 | **next-dev-loop** | `.agents/skills/next-dev-loop/` | After UI edits, with `next dev` running — verify runtime via `/_next/mcp` + `agent-browser` (compile/type-check is not enough) |
 | **langfuse** | Cursor plugin (`langfuse` enabled in `.cursor/settings.json`) | Tracing, scores, datasets, prompt management, trace debugging |
 | **skill-creator** | `.cursor/skills/skill-creator/` | Creating, editing, or benchmarking Cursor skills for this project |
+| **nexa-synthetic-data** | `.cursor/skills/nexa-synthetic-data/` | **First** for NexaCommerce operational seed data — `company.yaml`, generator, coherent FKs, labeled anomalies (`SCN-*`). Do not invent order rows in `DEMO_*` dicts or RAG. |
+| **nexa-company-architecture** | `.cursor/skills/nexa-company-architecture/` | Evolving the FAQ chatbot into a three-source support platform (PostgreSQL facts, policy engine, RAG docs), scoped tools, evals, security tests. Invoke **after** synthetic-data if schema/seed is missing. |
 
-`skills-lock.json` currently pins: `ecosystem-primer`, `fastapi`, `langgraph-cli`, `langgraph-docs`, `next-dev-loop`, `vercel-react-best-practices`. `project-setup` is project-authored (not in the lockfile).
+`skills-lock.json` currently pins: `ecosystem-primer`, `fastapi`, `langgraph-cli`, `langgraph-docs`, `next-dev-loop`, `vercel-react-best-practices`. `project-setup`, `nexa-synthetic-data`, and `nexa-company-architecture` are project-authored (not in the lockfile).
 
 ### Recommended skill order by task
 
 0. **New clone / env error / bootstrap / infra** → `project-setup`
-1. **New agent or graph feature** → `ecosystem-primer` → `langgraph-docs` → `ai-engineer-components` rule
-2. **New API endpoint** → `fastapi` → `ai-engineer-components` rule
-3. **RAG / retrieval** → `ecosystem-primer` (RAG section) → implement in `app/retrieval/`
-4. **Observability** → Langfuse skill + `app/observability/`
-5. **Evaluations** → `app/evaluation/` + Langfuse datasets; pytest in `tests/evaluation/`
-6. **Docker / deploy** → `langgraph-cli` if using LangGraph Platform; otherwise `docker-compose.yml`
-7. **React / Next.js UI** → `vercel-react-best-practices` (then the relevant `rules/*.md`) → with `next dev` running, `next-dev-loop`
-8. **New or improved Cursor skill** → `skill-creator`
+1. **Synthetic company data / seed / anomalies / `generate_data.py`** → `nexa-synthetic-data` (after `project-setup` if DB/migrations are involved)
+2. **NexaCommerce architecture (policy engine, DB-backed tools, KB split, evals)** → `nexa-company-architecture` → then layer skills below
+3. **New agent or graph feature** → `ecosystem-primer` → `langgraph-docs` → `ai-engineer-components` rule
+4. **New API endpoint** → `fastapi` → `ai-engineer-components` rule
+5. **RAG / retrieval** → `ecosystem-primer` (RAG section) → implement in `app/retrieval/` — documents only, never operational rows
+6. **Observability** → Langfuse skill + `app/observability/`
+7. **Evaluations** → `nexa-company-architecture` (case schema) → `app/evaluation/` + Langfuse datasets; pytest in `tests/evaluation/`
+8. **Docker / deploy** → `langgraph-cli` if using LangGraph Platform; otherwise `docker-compose.yml`
+9. **React / Next.js UI** → `vercel-react-best-practices` (then the relevant `rules/*.md`) → with `next dev` running, `next-dev-loop`
+10. **New or improved Cursor skill** → `skill-creator`
 
 ## Development conventions
 

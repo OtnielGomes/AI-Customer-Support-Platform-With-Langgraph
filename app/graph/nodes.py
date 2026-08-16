@@ -57,7 +57,11 @@ async def billing_node(state: SupportState) -> dict[str, Any]:
     with record_node_latency("billing"):
         text = _last_user_message(state)
         scopes = state.get("principal_scopes", ["read", "write"])
-        return await run_billing_agent(text, scopes)
+        return await run_billing_agent(
+            text,
+            scopes,
+            customer_id=state.get("customer_id"),
+        )
 
 
 async def logistics_node(state: SupportState) -> dict[str, Any]:
@@ -65,7 +69,7 @@ async def logistics_node(state: SupportState) -> dict[str, Any]:
     with record_node_latency("logistics"):
         text = _last_user_message(state)
         scopes = state.get("principal_scopes", ["read", "write"])
-        return await run_logistics_agent(text, scopes)
+        return await run_logistics_agent(text, scopes, customer_id=state.get("customer_id"))
 
 
 async def account_node(state: SupportState) -> dict[str, Any]:
@@ -73,7 +77,7 @@ async def account_node(state: SupportState) -> dict[str, Any]:
     with record_node_latency("account"):
         text = _last_user_message(state)
         scopes = state.get("principal_scopes", ["read", "write"])
-        return await run_account_agent(text, scopes)
+        return await run_account_agent(text, scopes, customer_id=state.get("customer_id"))
 
 
 async def escalation_node(state: SupportState) -> dict[str, Any]:
@@ -129,6 +133,7 @@ async def output_guardrails_node(state: SupportState) -> dict[str, Any]:
             validated = validate_output(
                 answer,
                 refund_tool_success=state.get("refund_tool_success", False),
+                refund_executed=state.get("refund_executed", False),
             )
             return {"draft_answer": validated}
         except GuardrailViolation as exc:

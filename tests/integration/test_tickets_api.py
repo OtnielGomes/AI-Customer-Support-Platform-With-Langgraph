@@ -159,7 +159,14 @@ def test_resolve_persists_run_and_events(client: TestClient, fake_graph: FakeGra
 
     detail = client.get(f"/tickets/{ticket_id}", headers=_auth_headers())
     assert detail.status_code == 200
-    assert detail.json()["status"] == "resolved"
+    assert detail.json()["status"] == "in_progress"
+
+    confirmed = client.post(
+        f"/tickets/{ticket_id}/confirm",
+        headers=_auth_headers(),
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    assert confirmed.json()["status"] == "resolved"
 
     runs = client.get(f"/tickets/{ticket_id}/runs", headers=_auth_headers())
     assert runs.status_code == 200
@@ -203,7 +210,7 @@ def test_escalation_reply_cycle(client: TestClient, fake_graph: FakeGraph) -> No
     assert reply.json()["answer"] == "Human handled this."
 
     detail = client.get(f"/tickets/{ticket_id}", headers=_auth_headers())
-    assert detail.json()["status"] == "resolved"
+    assert detail.json()["status"] == "in_progress"
 
 
 def test_close_ticket(client: TestClient) -> None:
@@ -216,6 +223,7 @@ def test_close_ticket(client: TestClient) -> None:
     )
     assert closed.status_code == 200, closed.text
     assert closed.json()["status"] == "closed"
+    assert "Closed by agent. Duplicate" in (closed.json()["resolution"] or "")
 
 
 def test_analytics_overview_and_tools(client: TestClient) -> None:

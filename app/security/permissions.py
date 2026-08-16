@@ -10,12 +10,19 @@ ACCOUNT_READ = "account:read"
 ACCOUNT_WRITE = "account:write"
 
 TOOL_PERMISSIONS: dict[str, list[str]] = {
-    "get_invoice": [BILLING_READ, READ],
-    "list_charges": [BILLING_READ, READ],
-    "request_refund": [BILLING_WRITE, WRITE],
+    "get_order": [BILLING_READ, LOGISTICS_READ, READ],
+    "get_order_items": [BILLING_READ, READ],
+    "get_payments": [BILLING_READ, READ],
+    "get_payment_status": [BILLING_READ, READ],
+    "check_refund_eligibility": [BILLING_READ, READ],
+    "create_refund_request": [BILLING_WRITE, WRITE],
     "search_knowledge_base": [READ],
-    "get_shipment_status": [LOGISTICS_READ, READ],
-    "update_delivery_address": [LOGISTICS_WRITE, WRITE],
-    "get_account_profile": [ACCOUNT_READ, READ],
-    "reset_account_password": [ACCOUNT_WRITE, WRITE],
+    "get_shipment": [LOGISTICS_READ, READ],
+    "get_shipping_status": [LOGISTICS_READ, READ],
+    "get_return_status": [LOGISTICS_READ, READ],
+    "create_return_request": [LOGISTICS_WRITE, WRITE],
+    "cancel_order": [LOGISTICS_WRITE, WRITE],
+    "get_customer": [ACCOUNT_READ, READ],
+    "verify_identity": [ACCOUNT_READ, READ],
+    "create_support_ticket": [ACCOUNT_WRITE, WRITE],
 }

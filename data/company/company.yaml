@@ -1,0 +1,64 @@
+# NexaCommerce world model — copy to data/company/company.yaml
+# Canonical constants for the generator, policy engine, and policy docs.
+
+company:
+  name: NexaCommerce
+  industry: ecommerce
+  country: Brazil
+  locale: pt_BR
+  currency: BRL
+  timezone: America/Sao_Paulo
+
+simulation:
+  # All relative dates ("35 days ago") are computed from this instant.
+  now: "2026-08-14T12:00:00-03:00"
+  seed: 42
+
+customer_tiers:
+  - standard
+  - silver
+  - gold
+  - enterprise
+
+account_statuses:
+  - active
+  - suspended
+  - closed
+
+support:
+  hours:
+    start: "08:00"
+    end: "20:00"
+  timezone: America/Sao_Paulo
+
+refund:
+  standard_window_days: 30
+  approval_threshold_brl: 1000
+  restocking_fee_rate: 0.10
+  original_payment_method_only: true
+  identity_verification_required: true
+
+warranty:
+  default_days: 90
+  laptops_days: 365
+  electronics_inspection_after_days: 7
+
+shipping:
+  carriers:
+    - Correios
+    - Jadlog
+    - DHL
+    - FedEx
+
+cancellation:
+  allowed_before_shipment: true
+  shipped_requires_return_flow: true
+
+products:
+  categories:
+    - smartphones
+    - laptops
+    - monitors
+    - headphones
+    - keyboards
+    - accessories

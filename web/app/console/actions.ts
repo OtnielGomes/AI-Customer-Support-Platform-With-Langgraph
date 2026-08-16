@@ -44,9 +44,15 @@ export async function replyEscalationAction(
 export async function closeTicketAction(
   ticketId: string,
   formData: FormData,
-): Promise<void> {
+): Promise<{ error: string } | void> {
   await requireConsoleAuth();
   const reason = String(formData.get("reason") ?? "").trim();
-  await closeTicket(ticketId, reason || undefined);
+  try {
+    await closeTicket(ticketId, reason || undefined);
+  } catch (caught) {
+    return {
+      error: caught instanceof Error ? caught.message : "Could not close ticket",
+    };
+  }
   redirect(`/console/tickets/${ticketId}`);
 }

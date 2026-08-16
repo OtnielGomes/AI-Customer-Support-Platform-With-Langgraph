@@ -1,28 +1,29 @@
-"""Unit tests for billing tools."""
+"""Unit tests for billing tools without a live database."""
 
-from app.tools.billing.tools import get_invoice, list_charges, request_refund
-
-
-def test_get_invoice_found() -> None:
-    """Should return invoice when ID exists."""
-    result = get_invoice.invoke({"invoice_id": "INV-1001"})
-    assert result["invoice_id"] == "INV-1001"
-    assert result["status"] == "paid"
+from app.tools.billing.tools import check_refund_eligibility, get_order, get_payments
+from app.tools.context import get_tool_context
 
 
-def test_get_invoice_not_found() -> None:
-    """Should return error for unknown invoice."""
-    result = get_invoice.invoke({"invoice_id": "INV-9999"})
+def test_tools_require_context() -> None:
+    """Operational tools error when no ToolContext is bound."""
+    assert get_tool_context() is None
+
+
+async def test_get_order_without_context() -> None:
+    """get_order should return a structured error without context."""
+    result = await get_order.ainvoke({"order_id": "ORD-01001"})
     assert "error" in result
 
 
-def test_list_charges() -> None:
-    """Should return demo charges."""
-    result = list_charges.invoke({"customer_id": "default"})
-    assert len(result) >= 1
+async def test_get_payments_without_context() -> None:
+    """get_payments should return a structured error without context."""
+    result = await get_payments.ainvoke({"order_id": "ORD-01001"})
+    assert "error" in result
 
 
-def test_request_refund_paid_invoice() -> None:
-    """Should approve refund for paid invoice."""
-    result = request_refund.invoke({"invoice_id": "INV-1001", "reason": "duplicate"})
-    assert result["status"] == "approved"
+async def test_check_refund_eligibility_without_context() -> None:
+    """Policy wrapper still requires a session to load the order."""
+    result = await check_refund_eligibility.ainvoke(
+        {"order_id": "ORD-01001", "reason": "customer_preference"}
+    )
+    assert "error" in result

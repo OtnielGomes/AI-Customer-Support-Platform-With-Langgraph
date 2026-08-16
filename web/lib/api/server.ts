@@ -93,6 +93,13 @@ export function closeTicket(ticketId: string, reason?: string): Promise<TicketRe
   });
 }
 
+export function confirmTicket(ticketId: string): Promise<TicketResponse> {
+  return apiFetch<TicketResponse>(`/tickets/${ticketId}/confirm`, {
+    method: "POST",
+    body: "{}",
+  });
+}
+
 export function listRuns(ticketId: string): Promise<AgentRunListResponse> {
   return apiFetch<AgentRunListResponse>(`/tickets/${ticketId}/runs`);
 }

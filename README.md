@@ -1,6 +1,8 @@
-# AI Customer Support Platform
+# Production-Oriented AI Customer Support Platform
 
-Agent-centric customer support platform where a **supervisor** identifies ticket intent, delegates to **domain agents** (billing, logistics, account), enables agents to use authorized tools and RAG over a knowledge base, and escalates to humans when automation cannot resolve the case.
+NexaCommerce support system: a **supervisor** routes tickets to domain workers that look up **operational facts in PostgreSQL**, retrieve **policies via RAG**, and enforce **deterministic rules** in `app/policies/` before any refund or cancellation. The LLM does not invent order state.
+
+This is not a FAQ chatbot. Tools are scoped to the ticket customer. Critical numbers (30-day window, BRL 1000 approval) live in `data/company/company.yaml` and are evaluated in Python.
 
 ## Stack
 
@@ -26,13 +28,14 @@ flowchart TD
     Supervisor --> Logistics[Logistics Agent]
     Supervisor --> Account[Account Agent]
     Supervisor --> Escalation[Escalation Agent]
-    Billing --> Tools[Domain Tools]
+    Billing --> Tools[Scoped Tools]
     Billing --> RAG[pgvector RAG]
+    Billing --> Policy[Policy Engine]
     Logistics --> Tools
     Account --> Tools
-    Tools --> DB[(PostgreSQL)]
-    RAG --> DB
-    Graph --> Redis[(Redis Cache)]
+    Tools --> DB[(PostgreSQL facts)]
+    RAG --> KB[Policy documents]
+    Policy --> YAML[company.yaml]
 ```
 
 ## Quickstart
@@ -58,7 +61,8 @@ $env:UV_LINK_MODE = "copy"   # PowerShell
 uv sync --link-mode=copy
 docker compose up -d db redis
 uv run alembic upgrade head
-uv run python scripts/seed_demo.py
+uv run python scripts/generate_data.py --profile demo --seed 42
+# or: uv run python scripts/seed_demo.py
 uv run python scripts/ingest_kb.py
 uv run fastapi dev
 ```
@@ -141,16 +145,18 @@ uv run pytest tests/integration -v
 uv run pytest tests/evaluation -v
 ```
 
+## Synthetic data
+
+```bash
+uv run python scripts/generate_data.py --profile demo --seed 42
+uv run python scripts/generate_data.py --profile v1 --seed 42 --replace
+```
+
+Profiles: `demo` (local smoke, every anomaly kind), `v1` (1000 customers / 3000 orders), `load` (optional). Fixtures are written to `data/fixtures/scenarios.json`. Do not put order rows in the knowledge base.
+
 ## Evaluation Baselines
 
-| Metric | Threshold |
-|--------|-----------|
-| Intent accuracy | >= 80% |
-| Escalation accuracy | >= 70% |
-| Keyword coverage | >= 60% |
-| Groundedness | >= 50% |
-
-Run full LLM evaluation with OpenAI key: label PR with `run-evaluation`.
+Thresholds in `app/evaluation/metrics.py` (intent, tool-call, policy compliance, unauthorized-action rate = 0). Publish measured scores only after a real eval run — do not invent percentages.
 
 ## Environment Variables
 

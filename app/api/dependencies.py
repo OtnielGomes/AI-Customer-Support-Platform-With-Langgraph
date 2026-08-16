@@ -11,6 +11,7 @@ from app.persistence import get_db_session
 from app.retrieval.embeddings import EmbeddingService
 from app.retrieval.retriever import KnowledgeRetriever
 from app.security.authentication import Principal, get_current_principal
+from app.tools.context import ToolContext, set_tool_context
 from app.tools.knowledge_base.tools import set_kb_context
 
 
@@ -49,8 +50,10 @@ async def get_knowledge_retriever(
 async def get_kb_context(
     session: Annotated[AsyncSession, Depends(get_session)],
     retriever: Annotated[KnowledgeRetriever, Depends(get_knowledge_retriever)],
+    principal: Annotated[Principal, Depends(get_current_principal)],
 ) -> AsyncGenerator[None, None]:
-    """Set KB tool context for the current request."""
+    """Set tool/KB context for the current request."""
+    set_tool_context(ToolContext(session=session, retriever=retriever, principal=principal))
     set_kb_context(session, retriever)
     yield
 

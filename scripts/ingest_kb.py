@@ -13,6 +13,7 @@ from app.config import get_settings
 from app.models.kb_chunk import KBChunk
 from app.persistence import get_session_factory
 from app.retrieval.embeddings import EmbeddingService
+from app.retrieval.ingest_paths import infer_domain, should_ingest
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -38,15 +39,6 @@ def chunk_text(text: str, size: int = CHUNK_SIZE) -> list[str]:
 def content_hash(content: str) -> str:
     """Hash content for idempotent upsert."""
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
-
-
-def infer_domain(path: Path) -> str:
-    """Infer domain from directory structure."""
-    parts = path.parts
-    for domain in ("billing", "logistics", "account"):
-        if domain in parts:
-            return domain
-    return "general"
 
 
 async def ingest_file(session: AsyncSession, path: Path, embedding_service: EmbeddingService) -> int:
@@ -93,6 +85,9 @@ async def main() -> None:
 
     async with factory() as session:
         for path in kb_root.rglob("*.md"):
+            if not should_ingest(path, settings.include_injection_corpus):
+                logger.info("Skipping injection corpus file %s", path)
+                continue
             ingested = await ingest_file(session, path, embedding_service)
             logger.info("Ingested %d chunks from %s", ingested, path)
             total += ingested

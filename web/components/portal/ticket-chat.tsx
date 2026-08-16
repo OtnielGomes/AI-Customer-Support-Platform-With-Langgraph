@@ -1,9 +1,8 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 
-import type { TicketResponse } from "@/lib/api/types";
+import type { TicketResponse, TicketStatus } from "@/lib/api/types";
 import { StatusBadge } from "@/components/status-badge";
 
 interface TicketChatProps {
@@ -11,70 +10,110 @@ interface TicketChatProps {
 }
 
 export function TicketChat({ ticket }: TicketChatProps) {
-  const router = useRouter();
-  const [message, setMessage] = useState(ticket.description);
+  const [status, setStatus] = useState<TicketStatus>(ticket.status);
+  const [resolution, setResolution] = useState(ticket.resolution);
+  const [message, setMessage] = useState(ticket.resolution ? "" : ticket.description);
   const [log, setLog] = useState<string[]>([]);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [askIfResolved, setAskIfResolved] = useState(
+    Boolean(ticket.resolution) && ticket.status !== "closed",
+  );
+  const [finished, setFinished] = useState(ticket.status === "closed");
+  const [busy, startTransition] = useTransition();
 
-  async function run(content: string) {
-    setBusy(true);
-    setError(null);
-    setLog((current) => [...current, `You: ${content}`]);
-    try {
-      const response = await fetch(`/api/support/tickets/${ticket.id}/stream`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [{ role: "user", content }],
-        }),
-      });
-      if (!response.ok || !response.body) {
-        throw new Error((await response.text()) || "Stream failed");
-      }
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          break;
+  const conversationClosed = status === "closed" || finished;
+
+  function run(content: string) {
+    startTransition(async () => {
+      setError(null);
+      setAskIfResolved(false);
+      setFinished(false);
+      setLog((current) => [...current, `You: ${content}`]);
+      setMessage("");
+      try {
+        const response = await fetch(`/api/support/tickets/${ticket.id}/stream`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            messages: [{ role: "user", content }],
+          }),
+        });
+        if (!response.ok || !response.body) {
+          throw new Error((await response.text()) || "Stream failed");
         }
-        buffer += decoder.decode(value, { stream: true });
-        const chunks = buffer.split("\n\n");
-        buffer = chunks.pop() ?? "";
-        for (const chunk of chunks) {
-          const event = parseSse(chunk);
-          if (event?.event === "update") {
-            const names = Object.keys(JSON.parse(event.data) as Record<string, unknown>);
-            setLog((current) => [...current, `Agent: ${names.join(", ")}`]);
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let awaitingHuman = false;
+        let answer = "";
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            break;
           }
-          if (event?.event === "done") {
-            const payload = JSON.parse(event.data) as {
-              answer?: string;
-              awaiting_human?: boolean;
-            };
-            if (payload.answer) {
-              setLog((current) => [...current, `Support: ${payload.answer}`]);
+          buffer += decoder.decode(value, { stream: true });
+          const chunks = buffer.split("\n\n");
+          buffer = chunks.pop() ?? "";
+          for (const chunk of chunks) {
+            const event = parseSse(chunk);
+            if (event?.event === "update") {
+              const names = Object.keys(JSON.parse(event.data) as Record<string, unknown>);
+              setLog((current) => [...current, `Agent: ${names.join(", ")}`]);
             }
-            if (payload.awaiting_human) {
-              setLog((current) => [
-                ...current,
-                "A specialist has been assigned. You can keep this page open for updates.",
-              ]);
+            if (event?.event === "done") {
+              const payload = JSON.parse(event.data) as {
+                answer?: string;
+                awaiting_human?: boolean;
+              };
+              if (payload.answer) {
+                answer = payload.answer;
+                setResolution(payload.answer);
+                setLog((current) => [...current, `Support: ${payload.answer}`]);
+              }
+              awaitingHuman = Boolean(payload.awaiting_human);
+              if (payload.awaiting_human) {
+                setStatus("escalated");
+                setLog((current) => [
+                  ...current,
+                  "A specialist has been assigned. You can keep this page open for updates.",
+                ]);
+              } else {
+                setStatus("in_progress");
+              }
             }
-          }
-          if (event?.event === "error") {
-            setError(event.data);
+            if (event?.event === "error") {
+              setError(event.data);
+            }
           }
         }
+        if (answer && !awaitingHuman) {
+          setAskIfResolved(true);
+        }
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "Request failed");
       }
-      router.refresh();
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Request failed");
-    } finally {
-      setBusy(false);
-    }
+    });
+  }
+
+  function confirmResolved() {
+    startTransition(async () => {
+      setError(null);
+      try {
+        const response = await fetch(`/api/support/tickets/${ticket.id}/confirm`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        });
+        if (!response.ok) {
+          throw new Error((await response.text()) || "Could not confirm resolution");
+        }
+        setStatus("resolved");
+        setAskIfResolved(false);
+        setFinished(true);
+      } catch (caught) {
+        setError(caught instanceof Error ? caught.message : "Could not confirm resolution");
+      }
+    });
   }
 
   return (
@@ -84,7 +123,7 @@ export function TicketChat({ ticket }: TicketChatProps) {
           <p className="text-sm text-[var(--muted)]">Ticket {ticket.id.slice(0, 8)}</p>
           <h1 className="font-[family-name:var(--font-serif)] text-3xl">{ticket.subject}</h1>
         </div>
-        <StatusBadge status={ticket.status} />
+        <StatusBadge status={status} />
       </div>
       <section className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-5">
         <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-[var(--muted)]">
@@ -92,8 +131,8 @@ export function TicketChat({ ticket }: TicketChatProps) {
         </h2>
         <div className="grid gap-3 text-sm leading-6">
           <p className="whitespace-pre-wrap text-[var(--muted)]">{ticket.description}</p>
-          {ticket.resolution ? (
-            <p className="whitespace-pre-wrap rounded-xl bg-[#f6efe4] p-4">{ticket.resolution}</p>
+          {resolution && log.length === 0 ? (
+            <p className="whitespace-pre-wrap rounded-xl bg-[#f6efe4] p-4">{resolution}</p>
           ) : null}
           {log.map((line, index) => (
             <p key={`${index}-${line.slice(0, 24)}`} className="whitespace-pre-wrap">
@@ -102,13 +141,43 @@ export function TicketChat({ ticket }: TicketChatProps) {
           ))}
         </div>
       </section>
-      {ticket.status === "resolved" || ticket.status === "closed" ? null : (
+      {askIfResolved && !conversationClosed ? (
+        <section className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-5">
+          <p className="text-sm font-medium">Did this resolve your issue?</p>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            Confirm if the answer helped, or send another message if you still need support.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={confirmResolved}
+              className="rounded-full bg-[var(--accent)] px-5 py-2.5 text-sm font-medium text-[var(--accent-ink)] disabled:opacity-60"
+            >
+              Yes, it&apos;s resolved
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setAskIfResolved(false)}
+              className="rounded-full border border-[var(--line)] px-5 py-2.5 text-sm disabled:opacity-60"
+            >
+              No, I still need help
+            </button>
+          </div>
+        </section>
+      ) : null}
+      {conversationClosed ? (
+        <p className="text-sm text-[var(--muted)]">
+          This ticket is {status}. Open a new ticket if you need more help.
+        </p>
+      ) : (
         <form
           className="grid gap-3"
           onSubmit={(event) => {
             event.preventDefault();
             if (message.trim()) {
-              void run(message.trim());
+              run(message.trim());
             }
           }}
         >
@@ -116,6 +185,7 @@ export function TicketChat({ ticket }: TicketChatProps) {
             value={message}
             onChange={(event) => setMessage(event.target.value)}
             rows={4}
+            placeholder="Add more details or ask a follow-up question…"
             className="rounded-xl border border-[var(--line)] bg-white px-3 py-2"
             disabled={busy}
           />

@@ -14,6 +14,7 @@ from app.persistence import Base
 if TYPE_CHECKING:
     from app.models.agent_run import AgentRun
     from app.models.customer import Customer
+    from app.models.order import Order
     from app.models.resolution import Resolution
 
 
@@ -47,6 +48,12 @@ class Ticket(Base):
         ForeignKey("customers.id"),
         index=True,
     )
+    order_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("orders.id"),
+        nullable=True,
+        index=True,
+    )
     subject: Mapped[str] = mapped_column(String(500))
     description: Mapped[str] = mapped_column(Text)
     status: Mapped[TicketStatus] = mapped_column(
@@ -69,5 +76,6 @@ class Ticket(Base):
     )
 
     customer: Mapped["Customer"] = relationship(back_populates="tickets")
+    order: Mapped["Order | None"] = relationship(back_populates="tickets")
     resolution: Mapped["Resolution | None"] = relationship(back_populates="ticket", uselist=False)
     agent_runs: Mapped[list["AgentRun"]] = relationship(back_populates="ticket")
