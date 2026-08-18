@@ -250,7 +250,7 @@ async def stream_human_turn(
                 "done",
                 {
                     "ticket_id": str(ticket.id),
-                    "answer": content,
+                    "answer": "",
                     "awaiting_human": False,
                     "escalated": False,
                 },

@@ -237,13 +237,16 @@ async def persist_graph_result(
         started_at=started_at,
         error=error,
     )
-    await append_message(
-        session,
-        ticket,
-        TicketMessageRole.ASSISTANT,
-        answer,
-        agent_run_id=run.id,
-    )
+    history = await list_messages(session, ticket.id)
+    last = history[-1] if history else None
+    if should_persist_assistant_message(last, answer):
+        await append_message(
+            session,
+            ticket,
+            TicketMessageRole.ASSISTANT,
+            answer,
+            agent_run_id=run.id,
+        )
 
     if escalated:
         get_metrics().increment("escalations")
@@ -519,6 +522,16 @@ async def list_messages(session: AsyncSession, ticket_id: uuid.UUID) -> list[Tic
         .order_by(TicketMessage.created_at.asc())
     )
     return list(result.scalars().all())
+
+
+def should_persist_assistant_message(last: TicketMessage | None, answer: str) -> bool:
+    """Skip a second bubble when the human turn already stored this text."""
+    text = answer.strip()
+    if not text or last is None:
+        return bool(text)
+    if last.role not in {TicketMessageRole.ASSISTANT, TicketMessageRole.HUMAN_AGENT}:
+        return True
+    return last.content.strip() != text
 
 
 async def assign_agent(session: AsyncSession, ticket: Ticket, agent: str) -> Ticket:

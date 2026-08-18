@@ -80,7 +80,7 @@ This file (`AGENTS.md` at repo root) is the **project** agent guide. Do not conf
 
 | Skill | Location | Invoke when |
 |-------|----------|-------------|
-| **project-setup** | `.agents/skills/project-setup/` | **First** for local setup, bootstrap, `.env`/Docker/ports, Windows fixes, migrations, seed, ingest, starting the API, portal `greenlet_spawn`, chat reply that vanishes until F5, or `/events` reconnecting every ~15s. Details: `references/runtime-invariants.md`. |
+| **project-setup** | `.agents/skills/project-setup/` | **First** for local setup, bootstrap, `.env`/Docker/ports, Windows fixes, migrations, seed, ingest, starting the API, portal `greenlet_spawn`, chat reply that vanishes until F5, `/events` reconnecting every ~15s, **duplicated chat bubbles**, **`Escalation reason:` in the transcript**, or a **human reply appearing twice**. Details: `references/runtime-invariants.md`. |
 | **ecosystem-primer** | `.agents/skills/ecosystem-primer/` | **First** for any LangChain/LangGraph/agent work — framework choice and next skill |
 | **fastapi** | `.agents/skills/fastapi/` | Routes, dependencies, Pydantic models, SSE streaming |
 | **langgraph-docs** | `.agents/skills/langgraph-docs/` | Graph design, multi-agent flows, HITL, checkpoints — fetch live docs via skill workflow |
@@ -91,7 +91,7 @@ This file (`AGENTS.md` at repo root) is the **project** agent guide. Do not conf
 | **skill-creator** | `.cursor/skills/skill-creator/` | Creating, editing, or benchmarking Cursor skills for this project |
 | **nexa-synthetic-data** | `.cursor/skills/nexa-synthetic-data/` | **First** for NexaCommerce operational seed data — `company.yaml`, generator, coherent FKs, labeled anomalies (`SCN-*`). Do not invent order rows in `DEMO_*` dicts or RAG. |
 | **nexa-company-architecture** | `.cursor/skills/nexa-company-architecture/` | Evolving the FAQ chatbot into a three-source support platform (PostgreSQL facts, policy engine, RAG docs), scoped tools, evals, security tests. Invoke **after** synthetic-data if schema/seed is missing. |
-| **nexa-realtime-chat** | `.cursor/skills/nexa-realtime-chat/` | Live portal chat, email login, `ticket_messages`, SSE + Redis pub/sub, console inbox takeover, identity-first prompts. Do not add WebSockets or a product MCP. |
+| **nexa-realtime-chat** | `.cursor/skills/nexa-realtime-chat/` | Live portal chat, email login, `ticket_messages`, SSE + Redis pub/sub, console inbox takeover, identity-first prompts. Also duplicate bubbles, escalation-reason leaks, duplicated human replies (after `project-setup` invariants). Do not add WebSockets or a product MCP. |
 
 `skills-lock.json` currently pins: `ecosystem-primer`, `fastapi`, `langgraph-cli`, `langgraph-docs`, `next-dev-loop`, `vercel-react-best-practices`. `project-setup`, `nexa-synthetic-data`, `nexa-company-architecture`, and `nexa-realtime-chat` are project-authored (not in the lockfile).
 
@@ -123,7 +123,7 @@ This file (`AGENTS.md` at repo root) is the **project** agent guide. Do not conf
 
 * **Supervisor** (`app/agents/supervisor.py`): intent classification and routing.
 * **Workers:** billing, logistics, account — each owns domain tools only. Shared identity + style prompts: `app/agents/prompts.py`.
-* **Escalation** (`app/agents/escalation.py`): human handoff criteria and ticket state updates.
+* **Escalation** (`app/agents/escalation.py`): human handoff. `draft_answer` is customer-facing only; `Escalation reason` stays on the interrupt payload.
 * Graph assembly: `app/graph/workflow.py` imports nodes from `nodes.py` and edges from `edges.py`. First worker-facing node after guardrails: `load_customer_context`.
 * Chat persistence: `ticket_messages`. Live fan-out: `app/services/chat_bus.py` (Redis `ticket:{id}:events`). SSE write path: `POST /tickets/{id}/messages`. Passive: `GET /tickets/{id}/events`.
 
@@ -131,7 +131,7 @@ This file (`AGENTS.md` at repo root) is the **project** agent guide. Do not conf
 
 * Authenticate in `app/security/authentication.py`; authorize per route/tool in `authorization.py` / `permissions.py`.
 * Portal customer identity: `app/security/customer_identity.py` via `X-Customer-Email` (existing customer only).
-* Apply `guardrails.py` on user input and model output before tools run or responses return (`normalize_markdown` on assistant text).
+* Apply `guardrails.py` on user input and model output before tools run or responses return (`sanitize_customer_answer` / `normalize_markdown` on assistant text).
 
 ### Data & RAG
 
@@ -226,7 +226,7 @@ uv run fastapi dev
 * **Async scripts on Windows:** `scripts/seed_demo.py` and `scripts/ingest_kb.py` use `SelectorEventLoop` when `sys.platform == "win32"`. The API sets `WindowsSelectorEventLoopPolicy` in `app/main.py` so Uvicorn/psycopg async works.
 * **Hot reload:** If `fastapi dev` reloads on `.venv` changes, use `uv run fastapi run` or stop `uv sync` while the server is running.
 * **Async ORM DTOs:** After `flush` on a new `Ticket`, reload with `get_ticket_or_404` (selectinload) before `ticket_to_response` — lazy `ticket.customer` raises MissingGreenlet.
-* **Live chat UI:** `web/hooks/use-chat-stream.ts` must keep assistant turns without a browser refresh (CRLF SSE parse, `done.answer`, per-ticket live cache). Redis fan-out uses `get_message(timeout=)`, not `wait_for(listen())`.
+* **Live chat UI:** `web/hooks/use-chat-stream.ts` must keep assistant turns without a browser refresh (CRLF SSE parse, `done.answer` fallback, per-ticket live cache) **and** must not duplicate them (chunk-only tokens, no leftover draft after `done`, fingerprint `assistant`+`human_agent`). Redis fan-out uses `get_message(timeout=)`, not `wait_for(listen())`. Human console replies persist once as `human_agent`.
 
 ## Commands
 
@@ -269,6 +269,8 @@ Evaluation code lives in `app/evaluation/`; pytest wrappers in `tests/evaluation
 * Treat TypeScript compile or type-check as sufficient verification of a running Next.js app — use `next-dev-loop` when `next dev` is up.
 * Lazy-load SQLAlchemy relationships on `AsyncSession` after `flush` (`ticket.customer`) — MissingGreenlet.
 * Reset live chat state from stale Server Component `initialMessages`, or heartbeat Redis SSE by cancelling `pubsub.listen()`.
+* Stream complete node `AIMessage`s as SSE tokens, append leftover draft after `done`, or show `Escalation reason:` to the customer.
+* Persist or render a human console reply a second time as `assistant`.
 
 ## Language
 

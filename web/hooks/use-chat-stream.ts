@@ -78,7 +78,9 @@ function isChatMessage(value: unknown): value is ChatMessage {
 }
 
 function fingerprint(message: ChatMessage): string {
-  return `${message.role}:${message.content}`;
+  const family =
+    message.role === "assistant" || message.role === "human_agent" ? "agent" : message.role;
+  return `${family}:${message.content}`;
 }
 
 function mergePreferLive(live: ChatMessage[], incoming: ChatMessage[]): ChatMessage[] {
@@ -285,9 +287,11 @@ export function useChatStream(ticketId: string | null, initial: ChatMessage[]) {
             }
           }
           if (event.event === "done") {
-            const assistant = assistantFromDone(event.data, draftRef.current);
-            if (assistant) {
-              upsert(assistant);
+            if (role !== "human_agent") {
+              const assistant = assistantFromDone(event.data, draftRef.current);
+              if (assistant) {
+                upsert(assistant);
+              }
             }
             committedAssistant = true;
             draftRef.current = "";
