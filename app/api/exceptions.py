@@ -22,6 +22,23 @@ class TicketNotFoundError(DomainError):
         super().__init__(f"Ticket not found: {ticket_id}", status_code=404)
 
 
+class CustomerNotFoundError(DomainError):
+    """Customer email is unknown or missing."""
+
+    def __init__(self, email: str) -> None:
+        if email == "missing":
+            super().__init__("Customer email is required", status_code=401)
+            return
+        super().__init__(f"Customer not found: {email}", status_code=404)
+
+
+class TicketOwnershipError(DomainError):
+    """Authenticated customer does not own the ticket."""
+
+    def __init__(self, ticket_id: str) -> None:
+        super().__init__(f"Ticket not found: {ticket_id}", status_code=404)
+
+
 class RunNotFoundError(DomainError):
     """Agent run not found."""
 

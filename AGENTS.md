@@ -30,19 +30,19 @@ Agent-centric customer support platform: a **supervisor** classifies ticket inte
 ```
 app/
 ├── api/
-│   ├── routes/          # tickets.py, health.py
-│   └── dependencies.py  # auth, DB, graph, Redis
-├── agents/              # supervisor, billing, logistics, account, escalation, tool_loop
+│   ├── routes/          # tickets.py, portal.py, health.py
+│   └── dependencies.py  # auth, DB, graph, Redis, customer identity
+├── agents/              # supervisor, billing, logistics, account, escalation, tool_loop, prompts
 ├── graph/               # state, nodes, edges, workflow
 ├── tools/               # billing/, logistics/, account/, knowledge_base/
 ├── policies/            # deterministic policy engine (yaml + rules)
 ├── synthetic/           # NexaCommerce world generator
 ├── retrieval/           # embeddings, retriever, reranker
-├── security/            # authentication, authorization, permissions, guardrails
+├── security/            # authentication, authorization, permissions, guardrails, customer_identity
 ├── evaluation/          # datasets/, evaluators.py, metrics.py
 ├── observability/       # logging, tracing, metrics
-├── models/              # ticket, customer, order, payment, shipment, refund, ...
-├── services/            # ticket listing, graph runner, analytics
+├── models/              # ticket, ticket_message, customer, order, payment, shipment, refund, ...
+├── services/            # ticket listing, graph runner, analytics, chat_bus
 └── config.py
 
 web/                     # Next.js Customer Portal + Support Console
@@ -80,7 +80,7 @@ This file (`AGENTS.md` at repo root) is the **project** agent guide. Do not conf
 
 | Skill | Location | Invoke when |
 |-------|----------|-------------|
-| **project-setup** | `.agents/skills/project-setup/` | **First** for local dev setup, bootstrap, `.env`/Docker/ports, Windows fixes, migrations, seed, ingest, starting the API, or any cross-cutting infra change |
+| **project-setup** | `.agents/skills/project-setup/` | **First** for local setup, bootstrap, `.env`/Docker/ports, Windows fixes, migrations, seed, ingest, starting the API, portal `greenlet_spawn`, chat reply that vanishes until F5, or `/events` reconnecting every ~15s. Details: `references/runtime-invariants.md`. |
 | **ecosystem-primer** | `.agents/skills/ecosystem-primer/` | **First** for any LangChain/LangGraph/agent work — framework choice and next skill |
 | **fastapi** | `.agents/skills/fastapi/` | Routes, dependencies, Pydantic models, SSE streaming |
 | **langgraph-docs** | `.agents/skills/langgraph-docs/` | Graph design, multi-agent flows, HITL, checkpoints — fetch live docs via skill workflow |
@@ -91,22 +91,24 @@ This file (`AGENTS.md` at repo root) is the **project** agent guide. Do not conf
 | **skill-creator** | `.cursor/skills/skill-creator/` | Creating, editing, or benchmarking Cursor skills for this project |
 | **nexa-synthetic-data** | `.cursor/skills/nexa-synthetic-data/` | **First** for NexaCommerce operational seed data — `company.yaml`, generator, coherent FKs, labeled anomalies (`SCN-*`). Do not invent order rows in `DEMO_*` dicts or RAG. |
 | **nexa-company-architecture** | `.cursor/skills/nexa-company-architecture/` | Evolving the FAQ chatbot into a three-source support platform (PostgreSQL facts, policy engine, RAG docs), scoped tools, evals, security tests. Invoke **after** synthetic-data if schema/seed is missing. |
+| **nexa-realtime-chat** | `.cursor/skills/nexa-realtime-chat/` | Live portal chat, email login, `ticket_messages`, SSE + Redis pub/sub, console inbox takeover, identity-first prompts. Do not add WebSockets or a product MCP. |
 
-`skills-lock.json` currently pins: `ecosystem-primer`, `fastapi`, `langgraph-cli`, `langgraph-docs`, `next-dev-loop`, `vercel-react-best-practices`. `project-setup`, `nexa-synthetic-data`, and `nexa-company-architecture` are project-authored (not in the lockfile).
+`skills-lock.json` currently pins: `ecosystem-primer`, `fastapi`, `langgraph-cli`, `langgraph-docs`, `next-dev-loop`, `vercel-react-best-practices`. `project-setup`, `nexa-synthetic-data`, `nexa-company-architecture`, and `nexa-realtime-chat` are project-authored (not in the lockfile).
 
 ### Recommended skill order by task
 
 0. **New clone / env error / bootstrap / infra** → `project-setup`
 1. **Synthetic company data / seed / anomalies / `generate_data.py`** → `nexa-synthetic-data` (after `project-setup` if DB/migrations are involved)
 2. **NexaCommerce architecture (policy engine, DB-backed tools, KB split, evals)** → `nexa-company-architecture` → then layer skills below
-3. **New agent or graph feature** → `ecosystem-primer` → `langgraph-docs` → `ai-engineer-components` rule
-4. **New API endpoint** → `fastapi` → `ai-engineer-components` rule
-5. **RAG / retrieval** → `ecosystem-primer` (RAG section) → implement in `app/retrieval/` — documents only, never operational rows
-6. **Observability** → Langfuse skill + `app/observability/`
-7. **Evaluations** → `nexa-company-architecture` (case schema) → `app/evaluation/` + Langfuse datasets; pytest in `tests/evaluation/`
-8. **Docker / deploy** → `langgraph-cli` if using LangGraph Platform; otherwise `docker-compose.yml`
-9. **React / Next.js UI** → `vercel-react-best-practices` (then the relevant `rules/*.md`) → with `next dev` running, `next-dev-loop`
-10. **New or improved Cursor skill** → `skill-creator`
+3. **Live chat / portal email login / console inbox / SSE** → `nexa-realtime-chat` → `fastapi` (SSE) → `langgraph-docs` (stream + HITL)
+4. **New agent or graph feature** → `ecosystem-primer` → `langgraph-docs` → `ai-engineer-components` rule
+5. **New API endpoint** → `fastapi` → `ai-engineer-components` rule
+6. **RAG / retrieval** → `ecosystem-primer` (RAG section) → implement in `app/retrieval/` — documents only, never operational rows
+7. **Observability** → Langfuse skill + `app/observability/`
+8. **Evaluations** → `nexa-company-architecture` (case schema) → `app/evaluation/` + Langfuse datasets; pytest in `tests/evaluation/`
+9. **Docker / deploy** → `langgraph-cli` if using LangGraph Platform; otherwise `docker-compose.yml`
+10. **React / Next.js UI** → `vercel-react-best-practices` (then the relevant `rules/*.md`) → with `next dev` running, `next-dev-loop`
+11. **New or improved Cursor skill** → `skill-creator`
 
 ## Development conventions
 
@@ -120,18 +122,20 @@ This file (`AGENTS.md` at repo root) is the **project** agent guide. Do not conf
 ### Agent layer
 
 * **Supervisor** (`app/agents/supervisor.py`): intent classification and routing.
-* **Workers:** billing, logistics, account — each owns domain tools only.
+* **Workers:** billing, logistics, account — each owns domain tools only. Shared identity + style prompts: `app/agents/prompts.py`.
 * **Escalation** (`app/agents/escalation.py`): human handoff criteria and ticket state updates.
-* Graph assembly: `app/graph/workflow.py` imports nodes from `nodes.py` and edges from `edges.py`.
+* Graph assembly: `app/graph/workflow.py` imports nodes from `nodes.py` and edges from `edges.py`. First worker-facing node after guardrails: `load_customer_context`.
+* Chat persistence: `ticket_messages`. Live fan-out: `app/services/chat_bus.py` (Redis `ticket:{id}:events`). SSE write path: `POST /tickets/{id}/messages`. Passive: `GET /tickets/{id}/events`.
 
 ### Security
 
 * Authenticate in `app/security/authentication.py`; authorize per route/tool in `authorization.py` / `permissions.py`.
-* Apply `guardrails.py` on user input and model output before tools run or responses return.
+* Portal customer identity: `app/security/customer_identity.py` via `X-Customer-Email` (existing customer only).
+* Apply `guardrails.py` on user input and model output before tools run or responses return (`normalize_markdown` on assistant text).
 
 ### Data & RAG
 
-* Models: `app/models/` — tickets, customers, resolutions.
+* Models: `app/models/` — tickets, ticket_messages, customers, orders, resolutions.
 * Vectors: pgvector in PostgreSQL; embedding and search in `app/retrieval/`.
 * Static KB files: `data/knowledge_base/`.
 
@@ -144,11 +148,11 @@ This file (`AGENTS.md` at repo root) is the **project** agent guide. Do not conf
 ### Frontend (`web/`)
 
 * Next.js 16.3 App Router + React. FastAPI remains the API and graph entry.
-* Browser clients talk to `web/app/api/support/[...path]` (BFF). The BFF injects `X-API-Key` from `SUPPORT_API_KEY` — never `NEXT_PUBLIC_`.
-* Customer Portal: `/` (new ticket), `/tickets/[id]` (status + SSE chat).
-* Support Console: `/console/tickets`, `/console/escalations`, `/console/analytics` (cookie login at `/login`).
-* Write/review UI with `vercel-react-best-practices` (load only the matching `rules/*.md`).
-* After edits, if `next dev` is running, verify with `next-dev-loop` — not compile/type-check alone.
+* Browser clients talk to `web/app/api/support/[...path]` (BFF). The BFF injects `X-API-Key` from `SUPPORT_API_KEY` and `X-Customer-Email` from the `portal_session` cookie — never `NEXT_PUBLIC_`.
+* Customer Portal: `/portal/login` (email), `/` (live chat home), `/tickets/[id]` (thread + SSE).
+* Support Console: `/console/inbox` (live conversations), `/console/inbox/[id]` (takeover), `/console/tickets`, `/console/analytics`. Cookie login at `/login`. `/console/escalations` redirects to the inbox filter.
+* Write/review UI with `vercel-react-best-practices` (load only the matching `rules/*.md`). Chat work: also read `nexa-realtime-chat`.
+* After edits, if `next dev` is running, verify with `next-dev-loop` — not compile/type-check alone. Playwright MCP (user) is allowed; `.cursor/mcp.json` stays empty.
 
 ## Environment variables (typical)
 
@@ -157,12 +161,13 @@ Copy from `.env.example` when present. Never commit secrets.
 | Variable | Purpose |
 |----------|---------|
 | `DATABASE_URL` | PostgreSQL (app + pgvector). **Local host:** `localhost:5433` (Docker maps `5433:5432` to avoid conflict with a local Postgres on 5432) |
-| `REDIS_URL` | Cache |
+| `REDIS_URL` | Cache + chat pub/sub |
 | `OPENAI_API_KEY` (or provider equivalent) | LLM + embeddings |
 | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST` | Langfuse |
 | OTel exporter vars | OpenTelemetry backend |
-
 | `CORS_ORIGINS` | Optional comma-separated browser origins (empty when using the Next.js BFF) |
+| `CHAT_STREAM_HEARTBEAT_SECONDS` | SSE heartbeat interval (default 15) |
+| `PORTAL_ALLOW_UNKNOWN_EMAIL` | Must stay `0` — unknown portal emails must not create customers |
 
 Frontend (`web/.env.local`, copy from `web/.env.example`):
 
@@ -171,6 +176,18 @@ Frontend (`web/.env.local`, copy from `web/.env.example`):
 | `SUPPORT_API_URL` | FastAPI base URL (`http://localhost:8000` locally, `http://api:8000` in Compose) |
 | `SUPPORT_API_KEY` | Server-only API key matching `API_KEYS` |
 | `CONSOLE_PASSWORD` | Support Console login |
+| `PORTAL_SESSION_SECRET` | HMAC secret for the customer `portal_session` cookie |
+
+## Demo portal logins (after `--profile demo --seed 42`)
+
+Seed emails are realistic and unique. Unknown emails are rejected at `/portal/session`.
+
+* `ana.costa@nexamail.com` — Ana Costa, double charge (`SCN-DOUBLE-PAY-001`), one order
+* `pedro.lima@outlook.com` — delayed shipment
+* `rafaela.fernandes@uol.com.br` — delivered but missing
+* `nicolas.dias@outlook.com` — high-value refund
+
+Full mapping: `data/fixtures/demo_logins.json`.
 
 ## Local development
 
@@ -206,8 +223,10 @@ uv run fastapi dev
 * **Postgres host port:** `5433` in `.env` / `.env.example`; Docker internal `db:5432` for the `api` service only.
 * **LangGraph checkpointer:** `AsyncConnectionPool` in `app/graph/workflow.py` must use `kwargs={"autocommit": True}` (migrations use `CREATE INDEX CONCURRENTLY`).
 * **StrEnum + PostgreSQL:** SQLAlchemy `Enum` columns need `values_callable=lambda x: [e.value for e in x]` so DB receives `open` not `OPEN`.
-* **Async scripts on Windows:** `scripts/seed_demo.py` and `scripts/ingest_kb.py` use `SelectorEventLoop` when `sys.platform == "win32"`.
+* **Async scripts on Windows:** `scripts/seed_demo.py` and `scripts/ingest_kb.py` use `SelectorEventLoop` when `sys.platform == "win32"`. The API sets `WindowsSelectorEventLoopPolicy` in `app/main.py` so Uvicorn/psycopg async works.
 * **Hot reload:** If `fastapi dev` reloads on `.venv` changes, use `uv run fastapi run` or stop `uv sync` while the server is running.
+* **Async ORM DTOs:** After `flush` on a new `Ticket`, reload with `get_ticket_or_404` (selectinload) before `ticket_to_response` — lazy `ticket.customer` raises MissingGreenlet.
+* **Live chat UI:** `web/hooks/use-chat-stream.ts` must keep assistant turns without a browser refresh (CRLF SSE parse, `done.answer`, per-ticket live cache). Redis fan-out uses `get_message(timeout=)`, not `wait_for(listen())`.
 
 ## Commands
 
@@ -248,6 +267,8 @@ Evaluation code lives in `app/evaluation/`; pytest wrappers in `tests/evaluation
 * Use `print` for operational logging.
 * Implement from memory for Langfuse, LangGraph, FastAPI, or Next.js APIs — use skills and live docs.
 * Treat TypeScript compile or type-check as sufficient verification of a running Next.js app — use `next-dev-loop` when `next dev` is up.
+* Lazy-load SQLAlchemy relationships on `AsyncSession` after `flush` (`ticket.customer`) — MissingGreenlet.
+* Reset live chat state from stale Server Component `initialMessages`, or heartbeat Redis SSE by cancelling `pubsub.listen()`.
 
 ## Language
 

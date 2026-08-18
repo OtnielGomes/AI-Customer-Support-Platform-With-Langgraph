@@ -82,6 +82,17 @@ npm run dev
 
 The UI talks to FastAPI through a Next.js BFF (`/api/support/*`). The API key stays on the server.
 
+Customer portal login is email-only (`/portal/login`). Unknown emails are rejected; customers are never created from the portal. After `generate_data.py --profile demo --seed 42`, use:
+
+| Email | Name | Typical scenario |
+|-------|------|------------------|
+| `ana.costa@nexamail.com` | Ana Costa | Double charge (`SCN-DOUBLE-PAY-001`, 1 pedido) |
+| `pedro.lima@outlook.com` | Pedro Lima | Delayed shipment |
+| `rafaela.fernandes@uol.com.br` | Rafaela Fernandes | Delivered but missing |
+| `nicolas.dias@outlook.com` | Nicolas Dias | High-value refund |
+
+More portal logins are exported to [`data/fixtures/demo_logins.json`](data/fixtures/demo_logins.json). Support console: http://localhost:3000/login (default password `console`). Inbox: `/console/inbox`.
+
 **Database URL:** local development uses PostgreSQL on host port **5433** (`localhost:5433`) so Docker does not conflict with a local Postgres on 5432. See `.env.example`.
 
 #### Windows notes

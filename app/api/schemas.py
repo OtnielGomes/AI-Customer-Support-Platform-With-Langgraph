@@ -1,5 +1,7 @@
 """API request/response schemas."""
 
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
 from typing import Any
@@ -12,12 +14,13 @@ from app.models.ticket import TicketIntent, TicketStatus
 
 
 class CreateTicketRequest(BaseModel):
-    """Request to create a support ticket."""
+    """Request to create a support ticket for an existing customer."""
 
     customer_email: str = Field(min_length=3, max_length=255)
     customer_name: str = Field(min_length=1, max_length=255)
     subject: str = Field(min_length=1, max_length=500)
     description: str = Field(min_length=1, max_length=10000)
+    order_id: uuid.UUID | None = None
 
 
 class MessageInput(BaseModel):
@@ -54,6 +57,72 @@ class CloseTicketRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=2000)
 
 
+class PortalSessionRequest(BaseModel):
+    """Validate a customer login email."""
+
+    email: str = Field(min_length=3, max_length=255)
+
+
+class CreateConversationRequest(BaseModel):
+    """Open a portal chat thread, optionally pinned to an order."""
+
+    order_id: uuid.UUID | None = None
+
+
+class ChatMessageRequest(BaseModel):
+    """A new chat turn from the customer or a human agent."""
+
+    content: str = Field(min_length=1, max_length=10000)
+    role: str = Field(default="customer", pattern="^(customer|human_agent|user|human)$")
+
+
+class TakeoverRequest(BaseModel):
+    """Assign a human agent to a live conversation."""
+
+    agent: str = Field(default="console", max_length=255)
+
+
+class OrderSummary(BaseModel):
+    """Compact order row for the portal and graph context."""
+
+    id: uuid.UUID
+    public_id: str
+    status: str
+    total_amount: str
+    currency: str
+    created_at: datetime | None = None
+
+
+class ChatMessageResponse(BaseModel):
+    """One persisted conversation message."""
+
+    id: uuid.UUID
+    ticket_id: uuid.UUID
+    role: str
+    content: str
+    agent_run_id: uuid.UUID | None = None
+    created_at: datetime | None = None
+
+
+class ChatMessageListResponse(BaseModel):
+    """Conversation history."""
+
+    items: list[ChatMessageResponse]
+
+
+class CustomerProfileResponse(BaseModel):
+    """Authenticated portal customer."""
+
+    id: uuid.UUID
+    public_id: str
+    email: str
+    name: str
+    customer_tier: str
+    account_status: str
+    orders: list[OrderSummary] = Field(default_factory=list)
+    conversations: list["TicketSummary"] = Field(default_factory=list)
+
+
 class ResolutionResponse(BaseModel):
     """Graph resolution result."""
 
@@ -83,6 +152,9 @@ class TicketResponse(BaseModel):
     escalated_at: datetime | None = None
     resolution: str | None = None
     escalated: bool = False
+    order_id: uuid.UUID | None = None
+    last_message_at: datetime | None = None
+    assigned_agent: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -99,6 +171,8 @@ class TicketSummary(BaseModel):
     intent: TicketIntent | None = None
     escalated: bool = False
     escalated_at: datetime | None = None
+    last_message_at: datetime | None = None
+    assigned_agent: str | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

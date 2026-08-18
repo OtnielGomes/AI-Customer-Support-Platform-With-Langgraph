@@ -6,7 +6,7 @@ import json
 import logging
 from pathlib import Path
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.agent_run import AgentEvent, AgentRun
@@ -33,15 +33,20 @@ from app.models.return_request import ReturnRequest
 from app.models.shipment import Shipment
 from app.models.synthetic_scenario import SyntheticScenario
 from app.models.ticket import Ticket, TicketIntent, TicketStatus
+from app.models.ticket_message import TicketMessage, TicketMessageRole
 from app.synthetic.records import World
 
 logger = logging.getLogger(__name__)
 
 FIXTURES_PATH = Path("data/fixtures/scenarios.json")
+DEMO_LOGINS_PATH = Path("data/fixtures/demo_logins.json")
+
+CHECKPOINT_TABLES = ("checkpoint_writes", "checkpoint_blobs", "checkpoints")
 
 OPERATIONAL_TABLES = (
     AgentEvent,
     AgentRun,
+    TicketMessage,
     Resolution,
     SyntheticScenario,
     Ticket,
@@ -56,7 +61,11 @@ OPERATIONAL_TABLES = (
 
 
 async def replace_operational_data(session: AsyncSession) -> None:
-    """Delete operational synthetic rows, keeping kb_chunks and agent_runs."""
+    """Delete operational synthetic rows, keeping kb_chunks."""
+    for table in CHECKPOINT_TABLES:
+        exists = await session.execute(text("SELECT to_regclass(:name)"), {"name": table})
+        if exists.scalar():
+            await session.execute(text(f"DELETE FROM {table}"))
     for model in OPERATIONAL_TABLES:
         await session.execute(delete(model))
     await session.execute(delete(Customer))
@@ -206,8 +215,21 @@ async def persist_world(session: AsyncSession, world: World) -> None:
                 status=TicketStatus(item.status),
                 intent=TicketIntent(item.intent) if item.intent else None,
                 created_at=item.created_at,
+                last_message_at=item.created_at,
             )
             for item in world.tickets
+        ]
+    )
+    session.add_all(
+        [
+            TicketMessage(
+                ticket_id=item.id,
+                role=TicketMessageRole.CUSTOMER,
+                content=item.description,
+                created_at=item.created_at,
+            )
+            for item in world.tickets
+            if item.description
         ]
     )
     session.add_all(
@@ -250,6 +272,7 @@ def export_scenarios(world: World, path: Path | None = None) -> Path:
                 "id": scenario.id,
                 "kind": scenario.kind,
                 "customer_public_id": customer.public_id,
+                "customer_email": customer.email,
                 "order_public_id": order.public_id if order else None,
                 "user_message": scenario.user_message_pt,
                 "expected_intent": scenario.expected_intent,
@@ -261,7 +284,45 @@ def export_scenarios(world: World, path: Path | None = None) -> Path:
         )
     target.write_text(json.dumps(payload, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
     logger.info("Wrote %s fixtures to %s", len(payload), target)
+    _export_demo_logins(world, customers, orders, target.parent / "demo_logins.json")
     return target
+
+
+def _export_demo_logins(
+    world: World,
+    customers: dict,
+    orders: dict,
+    path: Path,
+) -> None:
+    """Write portal login emails keyed by scenario for local demos."""
+    orders_by_customer: dict = {}
+    for order in world.orders:
+        orders_by_customer.setdefault(order.customer_id, []).append(order.public_id)
+    rows = []
+    for scenario in world.scenarios:
+        customer = customers[scenario.customer_id]
+        order = orders.get(scenario.order_id) if scenario.order_id else None
+        rows.append(
+            {
+                "email": customer.email,
+                "name": customer.name,
+                "customer_public_id": customer.public_id,
+                "scenario_id": scenario.id,
+                "kind": scenario.kind,
+                "order_public_id": order.public_id if order else None,
+                "order_count": len(orders_by_customer.get(customer.id, [])),
+            }
+        )
+    # Unique by email, first scenario wins for the README table.
+    seen: set[str] = set()
+    unique = []
+    for row in rows:
+        if row["email"] in seen:
+            continue
+        seen.add(row["email"])
+        unique.append(row)
+    path.write_text(json.dumps(unique, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
+    logger.info("Wrote %s demo logins to %s", len(unique), path)
 
 
 async def operational_row_count(session: AsyncSession) -> int:

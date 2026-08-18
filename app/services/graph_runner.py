@@ -43,9 +43,7 @@ def snapshot_to_result(snapshot: Any) -> dict[str, Any]:
             values["needs_human"] = True
         payload_value = extract_interrupt_payload(values)
         if payload_value and not values.get("draft_answer"):
-            values["draft_answer"] = payload_value.get("draft_answer") or payload_value.get(
-                "reason"
-            )
+            values["draft_answer"] = payload_value.get("draft_answer") or ""
     return values
 
 
@@ -56,10 +54,38 @@ async def stream_graph_updates(
     recorder: TraceRecorder,
 ) -> AsyncIterator[dict[str, Any]]:
     """Yield graph update events while buffering them on the recorder."""
-    async for event in graph.astream(payload, config=config, stream_mode="updates"):
-        if isinstance(event, dict):
-            recorder.record_graph_update(event)
-        yield event
+    async for event in stream_graph_events(graph, payload, config, recorder):
+        if event.get("mode") == "updates":
+            yield event["data"]
+
+
+async def stream_graph_events(
+    graph: Any,
+    payload: Any,
+    config: dict[str, Any],
+    recorder: TraceRecorder,
+) -> AsyncIterator[dict[str, Any]]:
+    """Yield ``updates`` and ``messages`` chunks from the compiled graph."""
+    async for item in graph.astream(
+        payload,
+        config=config,
+        stream_mode=["updates", "messages"],
+    ):
+        mode, chunk = _unpack_stream_item(item)
+        if mode == "updates" and isinstance(chunk, dict):
+            recorder.record_graph_update(chunk)
+            yield {"mode": "updates", "data": chunk}
+        elif mode == "messages":
+            yield {"mode": "messages", "data": chunk}
+
+
+def _unpack_stream_item(item: Any) -> tuple[str, Any]:
+    """Normalize LangGraph stream items across v1 tuples and v2 StreamPart dicts."""
+    if isinstance(item, tuple) and len(item) == 2 and isinstance(item[0], str):
+        return item[0], item[1]
+    if isinstance(item, dict) and "type" in item and "data" in item:
+        return str(item["type"]), item["data"]
+    return "updates", item
 
 
 def build_graph_config(

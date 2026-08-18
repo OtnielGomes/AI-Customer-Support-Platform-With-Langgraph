@@ -1,0 +1,92 @@
+[
+  {
+    "email": "ana.costa@nexamail.com",
+    "name": "Ana Costa",
+    "customer_public_id": "CUST-00001",
+    "scenario_id": "SCN-DOUBLE-PAY-001",
+    "kind": "double_payment",
+    "order_public_id": "ORD-01001",
+    "order_count": 1
+  },
+  {
+    "email": "pedro.lima@outlook.com",
+    "name": "Pedro Lima",
+    "customer_public_id": "CUST-00002",
+    "scenario_id": "SCN-DELAYED-SHIP-001",
+    "kind": "delayed_shipment",
+    "order_public_id": "ORD-01002",
+    "order_count": 2
+  },
+  {
+    "email": "rafaela.fernandes@uol.com.br",
+    "name": "Rafaela Fernandes",
+    "customer_public_id": "CUST-00003",
+    "scenario_id": "SCN-DELIVERED-MISSING-001",
+    "kind": "delivered_missing",
+    "order_public_id": "ORD-01003",
+    "order_count": 1
+  },
+  {
+    "email": "sofia.santos@nexamail.com",
+    "name": "Sofia Santos",
+    "customer_public_id": "CUST-00004",
+    "scenario_id": "SCN-REFUND-OUTSIDE-WINDOW-001",
+    "kind": "refund_outside_window",
+    "order_public_id": "ORD-01004",
+    "order_count": 2
+  },
+  {
+    "email": "gabriela.rocha@gmail.com",
+    "name": "Gabriela Rocha",
+    "customer_public_id": "CUST-00005",
+    "scenario_id": "SCN-DEFECT-WARRANTY-001",
+    "kind": "defective_warranty",
+    "order_public_id": "ORD-01005",
+    "order_count": 2
+  },
+  {
+    "email": "nicolas.dias@outlook.com",
+    "name": "Nicolas Dias",
+    "customer_public_id": "CUST-00006",
+    "scenario_id": "SCN-HIGH-VALUE-REFUND-001",
+    "kind": "high_value_refund",
+    "order_public_id": "ORD-01006",
+    "order_count": 1
+  },
+  {
+    "email": "ana.barbosa@uol.com.br",
+    "name": "Ana Barbosa",
+    "customer_public_id": "CUST-00007",
+    "scenario_id": "SCN-CANCEL-AFTER-SHIP-001",
+    "kind": "cancel_after_ship",
+    "order_public_id": "ORD-01007",
+    "order_count": 3
+  },
+  {
+    "email": "bruno.rocha@nexamail.com",
+    "name": "Bruno Rocha",
+    "customer_public_id": "CUST-00008",
+    "scenario_id": "SCN-FRAUD-RISK-001",
+    "kind": "fraud_risk",
+    "order_public_id": "ORD-01010",
+    "order_count": 3
+  },
+  {
+    "email": "sofia.cardoso@gmail.com",
+    "name": "Sofia Cardoso",
+    "customer_public_id": "CUST-00009",
+    "scenario_id": "SCN-FINAL-SALE-001",
+    "kind": "final_sale",
+    "order_public_id": "ORD-01011",
+    "order_count": 4
+  },
+  {
+    "email": "cliente.gold@outlook.com",
+    "name": "Cliente Gold",
+    "customer_public_id": "CUST-00010",
+    "scenario_id": "SCN-GOLD-TIER-001",
+    "kind": "gold_tier",
+    "order_public_id": "ORD-01012",
+    "order_count": 4
+  }
+]

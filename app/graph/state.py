@@ -17,6 +17,8 @@ class SupportState(TypedDict):
     order_public_id: NotRequired[str]
     order_status: NotRequired[str]
     order_total: NotRequired[str]
+    customer_name: NotRequired[str]
+    orders_summary: NotRequired[list[dict[str, Any]]]
     messages: Annotated[list[Any], add_messages]
     intent: NotRequired[str]
     confidence: NotRequired[float]

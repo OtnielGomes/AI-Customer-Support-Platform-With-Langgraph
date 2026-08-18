@@ -16,8 +16,8 @@ const serif = Source_Serif_4({
 });
 
 export const metadata: Metadata = {
-  title: "Northwind Support",
-  description: "Customer portal and support console for the AI customer support platform.",
+  title: "NexaCommerce Support",
+  description: "Customer portal and support console for the NexaCommerce AI support platform.",
 };
 
 export default function RootLayout({

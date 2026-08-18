@@ -25,6 +25,7 @@ from app.models.return_request import ReturnRequest
 from app.models.shipment import Shipment
 from app.models.synthetic_scenario import SyntheticScenario
 from app.models.ticket import Ticket, TicketIntent, TicketStatus
+from app.models.ticket_message import TicketMessage, TicketMessageRole
 
 __all__ = [
     "AccountStatus",
@@ -55,5 +56,7 @@ __all__ = [
     "SyntheticScenario",
     "Ticket",
     "TicketIntent",
+    "TicketMessage",
+    "TicketMessageRole",
     "TicketStatus",
 ]

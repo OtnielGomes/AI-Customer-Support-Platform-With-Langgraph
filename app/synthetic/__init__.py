@@ -6,7 +6,10 @@ from typing import Any
 
 from app.synthetic.anomalies import overlay_anomalies
 from app.synthetic.graph import (
+    DEMO_LOGIN_EMAIL,
+    DEMO_LOGIN_NAME,
     PROFILES,
+    allocate_login_email,
     assign_public_ids,
     assert_integrity,
     build_products,
@@ -42,9 +45,18 @@ def generate_world(
     world = World(products=build_products(rng, volumes["products"]))
     overlay_anomalies(world, rng, now, cfg, volumes["anomaly_copies"])
     fill_happy_path(world, rng, now, cfg, volumes["customers"], volumes["orders"])
-    if world.customers:
-        world.customers[0].email = "demo@example.com"
-        world.customers[0].name = "Demo Customer"
+    _apply_demo_login(world)
     assign_public_ids(world)
     assert_integrity(world)
     return world
+
+
+def _apply_demo_login(world: World) -> None:
+    """Pin the first customer to a documented portal login email."""
+    if not world.customers:
+        return
+    for customer in world.customers[1:]:
+        if customer.email.lower() == DEMO_LOGIN_EMAIL:
+            customer.email = allocate_login_email(world, customer.name, 99)
+    world.customers[0].email = DEMO_LOGIN_EMAIL
+    world.customers[0].name = DEMO_LOGIN_NAME

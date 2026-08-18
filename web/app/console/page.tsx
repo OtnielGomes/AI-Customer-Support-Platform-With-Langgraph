@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
 export default function ConsoleIndexPage() {
-  redirect("/console/tickets");
+  redirect("/console/inbox");
 }

@@ -120,9 +120,15 @@ def test_line_totals_reconcile() -> None:
 
 
 def test_demo_customer_email() -> None:
-    """Local demo keeps a stable portal email."""
+    """Local demo keeps a stable portal login email."""
     world = generate_world(profile="demo", seed=42)
-    assert any(item.email == "demo@example.com" for item in world.customers)
+    assert world.customers[0].email == "ana.costa@nexamail.com"
+    assert all("@" in item.email for item in world.customers)
+    assert not any(item.email.endswith("@example.com") for item in world.customers)
+    assert all(
+        sum(1 for order in world.orders if order.customer_id == customer.id) >= 1
+        for customer in world.customers
+    )
 
 
 def test_simulation_now_parses() -> None:

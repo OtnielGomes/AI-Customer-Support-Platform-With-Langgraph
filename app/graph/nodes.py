@@ -1,18 +1,22 @@
 """Graph node implementations."""
 
 import logging
+import uuid
 from typing import Any
 
 from langchain_core.messages import AIMessage, HumanMessage
 
 from app.agents.account import run_account_agent
 from app.agents.billing import run_billing_agent
-from app.agents.escalation import run_escalation_agent
+from app.agents.escalation import CUSTOMER_ESCALATION_MESSAGE, run_escalation_agent
 from app.agents.logistics import run_logistics_agent
 from app.agents.supervisor import classify_intent
 from app.graph.state import SupportState
+from app.models.customer import Customer
 from app.observability.metrics import record_node_latency
 from app.security.guardrails import GuardrailViolation, sanitize_input, validate_output
+from app.tools.context import get_tool_context
+from app.tools.lookups import list_customer_orders, order_to_dict
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +31,23 @@ def _last_user_message(state: SupportState) -> str:
     return ""
 
 
+def _conversation_history(state: SupportState) -> list[Any]:
+    """Return the graph message window for domain workers."""
+    return list(state.get("messages") or [])
+
+
+def _worker_kwargs(state: SupportState) -> dict[str, Any]:
+    """Shared identity context passed to domain workers."""
+    return {
+        "customer_id": state.get("customer_id"),
+        "customer_name": state.get("customer_name"),
+        "customer_tier": state.get("customer_tier"),
+        "account_status": state.get("account_status"),
+        "orders_summary": state.get("orders_summary"),
+        "history": _conversation_history(state),
+    }
+
+
 async def input_guardrails_node(state: SupportState) -> dict[str, Any]:
     """Sanitize user input before graph processing."""
     with record_node_latency("input_guardrails"):
@@ -39,6 +60,40 @@ async def input_guardrails_node(state: SupportState) -> dict[str, Any]:
                 "draft_answer": f"Input blocked: {exc.reason}",
             }
         return {}
+
+
+async def load_customer_context_node(state: SupportState) -> dict[str, Any]:
+    """Load the authenticated customer's profile and orders into graph state."""
+    with record_node_latency("load_customer_context"):
+        customer_id = state.get("customer_id")
+        context = get_tool_context()
+        if context is None or not customer_id:
+            return {}
+        try:
+            customer_uuid = uuid.UUID(str(customer_id))
+        except ValueError:
+            logger.warning("Invalid customer_id on graph state: %s", customer_id)
+            return {}
+        customer = await context.session.get(Customer, customer_uuid)
+        if customer is None:
+            return {}
+        orders = await list_customer_orders(context.session, customer.id)
+        summary = [order_to_dict(order) for order in orders]
+        selected: dict[str, Any] = {}
+        if len(orders) == 1:
+            selected = {
+                "order_public_id": orders[0].public_id,
+                "order_status": orders[0].status.value,
+                "order_total": str(orders[0].total_amount),
+            }
+        return {
+            "customer_public_id": customer.public_id,
+            "customer_name": customer.name,
+            "customer_tier": customer.customer_tier.value,
+            "account_status": customer.account_status.value,
+            "orders_summary": summary,
+            **selected,
+        }
 
 
 async def supervisor_node(state: SupportState) -> dict[str, Any]:
@@ -57,11 +112,7 @@ async def billing_node(state: SupportState) -> dict[str, Any]:
     with record_node_latency("billing"):
         text = _last_user_message(state)
         scopes = state.get("principal_scopes", ["read", "write"])
-        return await run_billing_agent(
-            text,
-            scopes,
-            customer_id=state.get("customer_id"),
-        )
+        return await run_billing_agent(text, scopes, **_worker_kwargs(state))
 
 
 async def logistics_node(state: SupportState) -> dict[str, Any]:
@@ -69,7 +120,7 @@ async def logistics_node(state: SupportState) -> dict[str, Any]:
     with record_node_latency("logistics"):
         text = _last_user_message(state)
         scopes = state.get("principal_scopes", ["read", "write"])
-        return await run_logistics_agent(text, scopes, customer_id=state.get("customer_id"))
+        return await run_logistics_agent(text, scopes, **_worker_kwargs(state))
 
 
 async def account_node(state: SupportState) -> dict[str, Any]:
@@ -77,7 +128,7 @@ async def account_node(state: SupportState) -> dict[str, Any]:
     with record_node_latency("account"):
         text = _last_user_message(state)
         scopes = state.get("principal_scopes", ["read", "write"])
-        return await run_account_agent(text, scopes, customer_id=state.get("customer_id"))
+        return await run_account_agent(text, scopes, **_worker_kwargs(state))
 
 
 async def escalation_node(state: SupportState) -> dict[str, Any]:
@@ -90,7 +141,7 @@ async def escalation_node(state: SupportState) -> dict[str, Any]:
     from langgraph.types import interrupt
 
     with record_node_latency("escalation"):
-        reason = state.get("draft_answer") or "Low confidence or unresolved issue"
+        reason = _internal_escalation_reason(state)
         prepared = await run_escalation_agent(
             reason=reason,
             draft_answer=state.get("draft_answer"),
@@ -99,16 +150,31 @@ async def escalation_node(state: SupportState) -> dict[str, Any]:
             "ticket_id": state.get("ticket_id"),
             "intent": state.get("intent"),
             "confidence": state.get("confidence"),
-            "reason": reason,
+            "reason": prepared.get("escalation_reason") or reason,
             "draft_answer": prepared.get("draft_answer"),
         }
         human = interrupt(payload)
-        answer = _human_answer(human) or prepared.get("draft_answer") or reason
+        answer = _human_answer(human) or prepared.get("draft_answer") or CUSTOMER_ESCALATION_MESSAGE
         return {
             "needs_human": False,
             "draft_answer": answer,
             "messages": [AIMessage(content=answer)],
         }
+
+
+def _internal_escalation_reason(state: SupportState) -> str:
+    """Build a console-only handoff reason; never customer-facing."""
+    decision = state.get("policy_decision") or {}
+    if isinstance(decision, dict):
+        for key in ("reason", "denial_reason", "message"):
+            value = decision.get(key)
+            if value:
+                return str(value)
+        if decision.get("requires_human"):
+            return "Policy requires human review"
+    if state.get("needs_human"):
+        return "Worker requested human handoff"
+    return "Low confidence or unresolved issue"
 
 
 def _human_answer(human: Any) -> str | None:

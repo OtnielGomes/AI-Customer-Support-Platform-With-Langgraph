@@ -40,15 +40,17 @@ class Settings(BaseSettings):
     supervisor_confidence_threshold: float = 0.7
     cors_origins: str = ""
     include_injection_corpus: bool = False
+    chat_stream_heartbeat_seconds: int = 15
+    portal_allow_unknown_email: bool = False
 
     def parsed_cors_origins(self) -> list[str]:
         """Parse CORS_ORIGINS as a comma-separated origin list."""
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
-    @field_validator("include_injection_corpus", mode="before")
+    @field_validator("include_injection_corpus", "portal_allow_unknown_email", mode="before")
     @classmethod
     def parse_include_injection(cls, value: object) -> bool:
-        """Parse INCLUDE_INJECTION_CORPUS from env strings."""
+        """Parse INCLUDE_INJECTION_CORPUS and PORTAL_ALLOW_UNKNOWN_EMAIL from env strings."""
         if isinstance(value, str):
             return value.strip().lower() in {"1", "true", "yes", "on"}
         return bool(value)

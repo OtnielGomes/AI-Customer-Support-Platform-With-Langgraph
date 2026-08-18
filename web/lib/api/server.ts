@@ -3,11 +3,13 @@ import type {
   AgentRunListResponse,
   AnalyticsOverviewResponse,
   AnalyticsToolsResponse,
-  CreateTicketRequest,
+  ChatMessageListResponse,
+  PortalMe,
   ResolutionResponse,
   TicketListResponse,
   TicketResponse,
 } from "@/lib/api/types";
+import { getPortalEmail } from "@/lib/auth";
 
 const API_URL = process.env.SUPPORT_API_URL ?? "http://localhost:8000";
 const API_KEY = process.env.SUPPORT_API_KEY ?? "";
@@ -25,11 +27,13 @@ function apiError(status: number, body: string): Error {
 }
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const email = await getPortalEmail();
   const response = await fetch(`${API_URL}${path}`, {
     ...init,
     headers: {
       "X-API-Key": API_KEY,
       "Content-Type": "application/json",
+      ...(email ? { "X-Customer-Email": email } : {}),
       ...(init?.headers ?? {}),
     },
     cache: "no-store",
@@ -43,10 +47,32 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   return (await response.json()) as T;
 }
 
-export function createTicket(body: CreateTicketRequest): Promise<TicketResponse> {
-  return apiFetch<TicketResponse>("/tickets", {
+export function getPortalMe(): Promise<PortalMe> {
+  return apiFetch<PortalMe>("/portal/me");
+}
+
+export function validatePortalSession(email: string): Promise<PortalMe> {
+  return apiFetch<PortalMe>("/portal/session", {
     method: "POST",
-    body: JSON.stringify(body),
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function createConversation(orderId?: string | null): Promise<TicketResponse> {
+  return apiFetch<TicketResponse>("/portal/conversations", {
+    method: "POST",
+    body: JSON.stringify({ order_id: orderId || null }),
+  });
+}
+
+export function listTicketMessages(ticketId: string): Promise<ChatMessageListResponse> {
+  return apiFetch<ChatMessageListResponse>(`/tickets/${ticketId}/messages`);
+}
+
+export function takeoverTicket(ticketId: string, agent = "console"): Promise<TicketResponse> {
+  return apiFetch<TicketResponse>(`/tickets/${ticketId}/takeover`, {
+    method: "POST",
+    body: JSON.stringify({ agent }),
   });
 }
 

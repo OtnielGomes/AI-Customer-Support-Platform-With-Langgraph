@@ -2,7 +2,9 @@
 
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
+import psycopg
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -11,6 +13,7 @@ from app.api.exceptions import register_exception_handlers
 from app.api.routes.analytics import router as analytics_router
 from app.api.routes.escalations import router as escalations_router
 from app.api.routes.health import router as health_router
+from app.api.routes.portal import router as portal_router
 from app.api.routes.runs import router as runs_router
 from app.api.routes.tickets import router as tickets_router
 from app.config import get_settings
@@ -24,23 +27,33 @@ class FakeGraph:
         self.resume_payload: dict | None = None
 
     async def astream(self, payload, config=None, stream_mode=None):
+        events = []
         if self.mode == "escalate":
-            yield {"supervisor": {"intent": "unknown", "confidence": 0.2}}
-            yield {"escalation": {"needs_human": True}}
-            return
-        if self.mode == "resume":
+            events = [
+                {"supervisor": {"intent": "unknown", "confidence": 0.2}},
+                {"escalation": {"needs_human": True}},
+            ]
+        elif self.mode == "resume":
             self.resume_payload = payload
-            yield {"escalation": {"draft_answer": "Human handled this."}}
-            yield {"output_guardrails": {"draft_answer": "Human handled this."}}
-            return
-        yield {"supervisor": {"intent": "billing", "confidence": 0.95}}
-        yield {
-            "billing": {
-                "draft_answer": "Invoice found.",
-                "tool_results": [{"tool": "get_invoice", "result": {"id": "INV-1001"}}],
-            }
-        }
-        yield {"resolution": {"needs_human": False, "draft_answer": "Invoice found."}}
+            events = [
+                {"escalation": {"draft_answer": "Human handled this."}},
+                {"output_guardrails": {"draft_answer": "Human handled this."}},
+            ]
+        else:
+            events = [
+                {"supervisor": {"intent": "billing", "confidence": 0.95}},
+                {
+                    "billing": {
+                        "draft_answer": "Invoice found.",
+                        "tool_results": [{"tool": "get_invoice", "result": {"id": "INV-1001"}}],
+                    }
+                },
+                {"resolution": {"needs_human": False, "draft_answer": "Invoice found."}},
+            ]
+        modes = stream_mode if isinstance(stream_mode, list) else [stream_mode or "updates"]
+        for event in events:
+            if "updates" in modes:
+                yield ("updates", event) if isinstance(stream_mode, list) else event
 
     async def aget_state(self, config):
         if self.mode == "escalate":
@@ -100,6 +113,7 @@ def client(fake_graph: FakeGraph) -> TestClient:
     app = FastAPI()
     register_exception_handlers(app)
     app.include_router(health_router)
+    app.include_router(portal_router)
     app.include_router(tickets_router)
     app.include_router(escalations_router)
     app.include_router(runs_router)
@@ -115,12 +129,31 @@ def client(fake_graph: FakeGraph) -> TestClient:
     return TestClient(app)
 
 
+def _ensure_customer(email: str, name: str = "Test User") -> None:
+    """Insert a customer row when the portal no longer auto-creates accounts."""
+    dsn = get_settings().database_url.replace("postgresql+psycopg://", "postgresql://")
+    with psycopg.connect(dsn) as conn:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT 1 FROM customers WHERE email = %s", (email,))
+            if cursor.fetchone() is None:
+                cursor.execute(
+                    """
+                    INSERT INTO customers (id, public_id, email, name, customer_tier, account_status)
+                    VALUES (%s, %s, %s, %s, 'standard', 'active')
+                    """,
+                    (str(uuid4()), f"CUST-{uuid4().hex[:8].upper()}", email, name),
+                )
+        conn.commit()
+
+
 def _create_ticket(client: TestClient, suffix: str) -> dict:
+    email = f"user-{suffix}@example.com"
+    _ensure_customer(email)
     response = client.post(
         "/tickets",
         headers=_auth_headers(),
         json={
-            "customer_email": f"user-{suffix}@example.com",
+            "customer_email": email,
             "customer_name": "Test User",
             "subject": f"Help {suffix}",
             "description": "I have a question about invoice INV-1001",
@@ -244,3 +277,100 @@ def test_list_tickets_requires_auth(client: TestClient) -> None:
     """Listing tickets without an API key should fail."""
     response = client.get("/tickets")
     assert response.status_code == 401
+
+
+def test_create_ticket_unknown_email_is_rejected(client: TestClient) -> None:
+    """Unknown emails must not create orphan customers."""
+    response = client.post(
+        "/tickets",
+        headers=_auth_headers(),
+        json={
+            "customer_email": "nobody-unknown@example.com",
+            "customer_name": "Ghost",
+            "subject": "Help",
+            "description": "I need help",
+        },
+    )
+    assert response.status_code == 404
+
+
+def test_portal_create_conversation_returns_ticket(client: TestClient) -> None:
+    """Opening a portal chat must serialize without lazy-loading ORM relations."""
+    email = "portal-chat@example.com"
+    _ensure_customer(email, "Portal Chat")
+    response = client.post(
+        "/portal/conversations",
+        headers={**_auth_headers(), "X-Customer-Email": email},
+        json={"order_id": None},
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["customer_email"] == email
+    assert body["customer_name"] == "Portal Chat"
+    assert body["status"] == "open"
+    assert body["subject"] == "Support chat"
+
+
+def test_portal_session_valid_and_invalid(client: TestClient) -> None:
+    """Portal login validates against existing customers only."""
+    email = "portal-session@example.com"
+    _ensure_customer(email, "Portal User")
+    ok = client.post("/portal/session", headers=_auth_headers(), json={"email": email})
+    assert ok.status_code == 200, ok.text
+    body = ok.json()
+    assert body["email"] == email
+    assert body["name"] == "Portal User"
+
+    missing = client.post(
+        "/portal/session",
+        headers=_auth_headers(),
+        json={"email": "missing-user@example.com"},
+    )
+    assert missing.status_code == 404
+
+
+def test_cross_customer_cannot_read_ticket(client: TestClient) -> None:
+    """Customer B must not read customer A's ticket even with a valid API key."""
+    created = _create_ticket(client, "own-a")
+    other = "user-own-b@example.com"
+    _ensure_customer(other, "Other User")
+    hidden = client.get(
+        f"/tickets/{created['id']}",
+        headers={**_auth_headers(), "X-Customer-Email": other},
+    )
+    assert hidden.status_code == 404
+
+
+def test_post_message_sse_persists_history(client: TestClient, fake_graph: FakeGraph) -> None:
+    """POST /messages streams SSE and stores customer + assistant turns."""
+    fake_graph.mode = "resolve"
+    created = _create_ticket(client, "sse")
+    ticket_id = created["id"]
+    with client.stream(
+        "POST",
+        f"/tickets/{ticket_id}/messages",
+        headers=_auth_headers(),
+        json={"content": "Where is invoice INV-1001?", "role": "customer"},
+    ) as response:
+        assert response.status_code == 200, response.text
+        payload = "".join(response.iter_text())
+    assert "done" in payload
+    assert "Invoice found" in payload
+
+    history = client.get(f"/tickets/{ticket_id}/messages", headers=_auth_headers())
+    assert history.status_code == 200, history.text
+    roles = [item["role"] for item in history.json()["items"]]
+    assert "customer" in roles
+    assert "assistant" in roles
+
+
+def test_takeover_assigns_agent(client: TestClient) -> None:
+    """Console takeover stores assigned_agent on the ticket."""
+    created = _create_ticket(client, "take")
+    response = client.post(
+        f"/tickets/{created['id']}/takeover",
+        headers=_auth_headers(),
+        json={"agent": "console"},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["assigned_agent"] == "console"

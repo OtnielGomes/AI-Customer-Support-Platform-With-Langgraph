@@ -21,6 +21,19 @@ a {
   text-decoration: none;
 }
 
+.chat-markdown p {
+  margin: 0 0 0.5rem;
+}
+
+.chat-markdown p:last-child {
+  margin-bottom: 0;
+}
+
+.chat-markdown ul,
+.chat-markdown ol {
+  margin: 0.25rem 0 0.5rem 1.1rem;
+}
+
 input,
 textarea,
 select,

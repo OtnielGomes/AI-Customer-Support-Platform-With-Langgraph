@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from app.agents.prompts import compose_worker_prompt
 from app.agents.tool_loop import bind_ticket_customer, run_tool_loop
 from app.tools.billing.tools import BILLING_TOOLS
 from app.tools.knowledge_base.tools import search_knowledge_base
@@ -22,6 +23,11 @@ async def run_billing_agent(
     principal_scopes: list[str],
     kb_context: list[dict[str, Any]] | None = None,
     customer_id: str | None = None,
+    customer_name: str | None = None,
+    customer_tier: str | None = None,
+    account_status: str | None = None,
+    orders_summary: list[dict[str, Any]] | None = None,
+    history: list[Any] | None = None,
 ) -> dict[str, Any]:
     """Run billing worker with a real tool-calling loop."""
     bind_ticket_customer(customer_id)
@@ -30,8 +36,15 @@ async def run_billing_agent(
         extra = "Knowledge base:\n" + str(kb_context)
     tools = [*BILLING_TOOLS, search_knowledge_base]
     result = await run_tool_loop(
-        system_prompt=BILLING_SYSTEM,
+        system_prompt=compose_worker_prompt(
+            BILLING_SYSTEM,
+            customer_name=customer_name,
+            customer_tier=customer_tier,
+            account_status=account_status,
+            orders_summary=orders_summary,
+        ),
         user_message=user_message,
+        history=history,
         tools=tools,
         principal_scopes=principal_scopes,
         extra_context=extra,

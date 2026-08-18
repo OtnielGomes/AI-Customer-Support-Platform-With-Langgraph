@@ -18,6 +18,7 @@ from app.tools.context import get_tool_context
 logger = logging.getLogger(__name__)
 
 MAX_TOOL_ITERATIONS = 4
+HISTORY_WINDOW = 12
 
 
 def bind_ticket_customer(customer_id: str | None) -> None:
@@ -38,7 +39,8 @@ def _tool_map(tools: list[BaseTool]) -> dict[str, BaseTool]:
 async def run_tool_loop(
     *,
     system_prompt: str,
-    user_message: str,
+    user_message: str = "",
+    history: list[Any] | None = None,
     tools: list[BaseTool],
     principal_scopes: list[str],
     extra_context: str = "",
@@ -47,7 +49,8 @@ async def run_tool_loop(
 
     Args:
         system_prompt: Worker instructions.
-        user_message: Latest customer utterance.
+        user_message: Latest customer utterance when ``history`` is omitted.
+        history: Optional conversation window (human/ai messages).
         tools: Domain tools plus KB search.
         principal_scopes: API key scopes used for authorize_tool.
         extra_context: Optional retrieved policy text prepended to the user turn.
@@ -64,14 +67,21 @@ async def run_tool_loop(
     model = build_chat_model().bind_tools(tools)
     tools_by_name = _tool_map(tools)
 
-    human = user_message
-    if extra_context:
-        human = f"{extra_context}\n\nCustomer: {user_message}"
-    messages: list[Any] = [SystemMessage(content=system_prompt), HumanMessage(content=human)]
+    messages: list[Any] = [SystemMessage(content=system_prompt)]
+    window = list(history or [])[-HISTORY_WINDOW:]
+    if window:
+        messages.extend(window)
+        if extra_context:
+            messages.insert(1, HumanMessage(content=extra_context))
+    else:
+        human = user_message
+        if extra_context:
+            human = f"{extra_context}\n\nCustomer: {user_message}"
+        messages.append(HumanMessage(content=human))
 
     answer = ""
     for _ in range(MAX_TOOL_ITERATIONS):
-        response = await model.ainvoke(messages)
+        response = await _astream_complete(model, messages)
         messages.append(response)
         tool_calls = getattr(response, "tool_calls", None) or []
         if not tool_calls:
@@ -140,3 +150,16 @@ async def run_tool_loop(
         "refund_executed": refund_executed,
         "messages": [AIMessage(content=answer)],
     }
+
+
+async def _astream_complete(model: Any, messages: list[Any]) -> Any:
+    """Stream a model turn so LangGraph can emit tokens, then return the full message."""
+    stream = getattr(model, "astream", None)
+    if stream is None:
+        return await model.ainvoke(messages)
+    assembled: Any = None
+    async for chunk in stream(messages):
+        assembled = chunk if assembled is None else assembled + chunk
+    if assembled is None:
+        return await model.ainvoke(messages)
+    return assembled

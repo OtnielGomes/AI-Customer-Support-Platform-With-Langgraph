@@ -2,6 +2,7 @@
  * Hand-written DTOs aligned with `app/api/schemas.py`.
  * Regenerate a full OpenAPI dump with `npm run generate:types` when the API is running.
  */
+export type TicketStatus =
   | "open"
   | "in_progress"
   | "resolved"
@@ -23,6 +24,8 @@ export type AgentEventType =
   | "retrieval"
   | "guardrail";
 
+export type ChatMessageRole = "customer" | "assistant" | "human_agent" | "system";
+
 export interface TicketSummary {
   id: string;
   customer_id: string;
@@ -33,6 +36,8 @@ export interface TicketSummary {
   intent: TicketIntent | null;
   escalated: boolean;
   escalated_at: string | null;
+  last_message_at: string | null;
+  assigned_agent: string | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -56,8 +61,53 @@ export interface TicketResponse {
   escalated_at: string | null;
   resolution: string | null;
   escalated: boolean;
+  order_id: string | null;
+  last_message_at: string | null;
+  assigned_agent: string | null;
   created_at: string | null;
   updated_at: string | null;
+}
+
+export interface OrderSummary {
+  id: string;
+  public_id: string;
+  status: string;
+  total_amount: string;
+  currency: string;
+  created_at: string | null;
+}
+
+export interface ChatMessage {
+  id: string;
+  ticket_id: string;
+  role: ChatMessageRole;
+  content: string;
+  agent_run_id: string | null;
+  created_at: string | null;
+}
+
+export interface ChatMessageListResponse {
+  items: ChatMessage[];
+}
+
+export type ChatStreamEvent =
+  | { event: "token"; data: { text: string } }
+  | { event: "message"; data: ChatMessage }
+  | { event: "status"; data: { nodes?: string[] } }
+  | { event: "tool"; data: { name: string; status: string } }
+  | { event: "done"; data: ResolutionResponse }
+  | { event: "error"; data: { error: string } }
+  | { event: "heartbeat"; data: { ts: string } };
+
+export interface PortalMe {
+  id: string;
+  public_id: string;
+  email: string;
+  name: string;
+  customer_tier: string;
+  account_status: string;
+  orders: OrderSummary[];
+  conversations: TicketSummary[];
 }
 
 export interface ResolutionResponse {

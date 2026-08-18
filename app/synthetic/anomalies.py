@@ -74,9 +74,7 @@ def _suffix(copy_index: int) -> str:
 
 def _double_payment(world, rng, now, company, copy_index, window, threshold) -> None:
     del window, threshold
-    customer = build_customer(
-        rng, now, index=len(world.customers) + 1, tier="standard", email=f"double.{copy_index}@example.com"
-    )
+    customer = build_customer(world, rng, now, index=len(world.customers) + 1, tier="standard")
     world.customers.append(customer)
     product = _product_by_category(world, "headphones", final_sale=False)
     order = add_order_bundle(
@@ -113,9 +111,7 @@ def _double_payment(world, rng, now, company, copy_index, window, threshold) -> 
 
 def _delayed_shipment(world, rng, now, company, copy_index, window, threshold) -> None:
     del window, threshold
-    customer = build_customer(
-        rng, now, index=len(world.customers) + 1, email=f"delayed.{copy_index}@example.com"
-    )
+    customer = build_customer(world, rng, now, index=len(world.customers) + 1)
     world.customers.append(customer)
     product = _product_by_category(world, "accessories")
     order = add_order_bundle(
@@ -152,9 +148,7 @@ def _delayed_shipment(world, rng, now, company, copy_index, window, threshold) -
 
 def _delivered_missing(world, rng, now, company, copy_index, window, threshold) -> None:
     del window, threshold
-    customer = build_customer(
-        rng, now, index=len(world.customers) + 1, email=f"missing.{copy_index}@example.com"
-    )
+    customer = build_customer(world, rng, now, index=len(world.customers) + 1)
     world.customers.append(customer)
     product = _product_by_category(world, "keyboards")
     order = add_order_bundle(
@@ -191,9 +185,7 @@ def _delivered_missing(world, rng, now, company, copy_index, window, threshold) 
 
 def _refund_outside_window(world, rng, now, company, copy_index, window, threshold) -> None:
     del threshold
-    customer = build_customer(
-        rng, now, index=len(world.customers) + 1, email=f"outside.{copy_index}@example.com"
-    )
+    customer = build_customer(world, rng, now, index=len(world.customers) + 1)
     world.customers.append(customer)
     product = _product_by_category(world, "accessories", final_sale=False)
     created = now - timedelta(days=window + 20)
@@ -240,9 +232,7 @@ def _refund_outside_window(world, rng, now, company, copy_index, window, thresho
 
 def _defective_warranty(world, rng, now, company, copy_index, window, threshold) -> None:
     del threshold
-    customer = build_customer(
-        rng, now, index=len(world.customers) + 1, email=f"defect.{copy_index}@example.com"
-    )
+    customer = build_customer(world, rng, now, index=len(world.customers) + 1)
     world.customers.append(customer)
     product = _product_by_category(world, "laptops", final_sale=False)
     created = now - timedelta(days=window + 25)
@@ -289,9 +279,7 @@ def _defective_warranty(world, rng, now, company, copy_index, window, threshold)
 
 def _high_value_refund(world, rng, now, company, copy_index, window, threshold) -> None:
     del window
-    customer = build_customer(
-        rng, now, index=len(world.customers) + 1, tier="silver", email=f"highvalue.{copy_index}@example.com"
-    )
+    customer = build_customer(world, rng, now, index=len(world.customers) + 1, tier="silver")
     world.customers.append(customer)
     product = next(item for item in world.products if item.unit_price > threshold and item.category == "laptops")
     order = add_order_bundle(
@@ -337,9 +325,7 @@ def _high_value_refund(world, rng, now, company, copy_index, window, threshold) 
 
 def _cancel_after_ship(world, rng, now, company, copy_index, window, threshold) -> None:
     del window, threshold
-    customer = build_customer(
-        rng, now, index=len(world.customers) + 1, email=f"cancel.{copy_index}@example.com"
-    )
+    customer = build_customer(world, rng, now, index=len(world.customers) + 1)
     world.customers.append(customer)
     product = _product_by_category(world, "monitors")
     order = add_order_bundle(
@@ -375,9 +361,7 @@ def _cancel_after_ship(world, rng, now, company, copy_index, window, threshold) 
 
 def _fraud_risk(world, rng, now, company, copy_index, window, threshold) -> None:
     del window
-    customer = build_customer(
-        rng, now, index=len(world.customers) + 1, email=f"fraud.{copy_index}@example.com"
-    )
+    customer = build_customer(world, rng, now, index=len(world.customers) + 1)
     world.customers.append(customer)
     cheap = _product_by_category(world, "accessories")
     expensive = next(item for item in world.products if item.unit_price > threshold)
@@ -438,9 +422,7 @@ def _fraud_risk(world, rng, now, company, copy_index, window, threshold) -> None
 
 def _final_sale(world, rng, now, company, copy_index, window, threshold) -> None:
     del window, threshold
-    customer = build_customer(
-        rng, now, index=len(world.customers) + 1, email=f"finalsale.{copy_index}@example.com"
-    )
+    customer = build_customer(world, rng, now, index=len(world.customers) + 1)
     world.customers.append(customer)
     product = _product_by_category(world, "accessories", final_sale=True)
     order = add_order_bundle(
@@ -487,11 +469,11 @@ def _final_sale(world, rng, now, company, copy_index, window, threshold) -> None
 def _gold_tier(world, rng, now, company, copy_index, window, threshold) -> None:
     del threshold
     customer = build_customer(
+        world,
         rng,
         now,
         index=len(world.customers) + 1,
         tier="gold",
-        email=f"gold.{copy_index}@example.com",
         name="Cliente Gold",
     )
     world.customers.append(customer)

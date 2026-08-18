@@ -1,4 +1,7 @@
+import { cookies } from "next/headers";
 import { NextRequest } from "next/server";
+
+import { PORTAL_COOKIE, parsePortalSession } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
@@ -14,6 +17,11 @@ async function proxy(request: NextRequest, path: string[]): Promise<Response> {
   const contentType = request.headers.get("content-type");
   if (contentType) {
     headers.set("content-type", contentType);
+  }
+  const jar = await cookies();
+  const email = parsePortalSession(jar.get(PORTAL_COOKIE)?.value);
+  if (email) {
+    headers.set("X-Customer-Email", email);
   }
 
   const method = request.method;
@@ -33,6 +41,11 @@ async function proxy(request: NextRequest, path: string[]): Promise<Response> {
   const contentTypeOut = upstream.headers.get("content-type");
   if (contentTypeOut) {
     out.set("content-type", contentTypeOut);
+  }
+  if (contentTypeOut?.includes("text/event-stream")) {
+    out.set("cache-control", "no-cache");
+    out.set("connection", "keep-alive");
+    out.set("x-accel-buffering", "no");
   }
   return new Response(upstream.body, {
     status: upstream.status,

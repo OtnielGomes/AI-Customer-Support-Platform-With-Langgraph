@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import unicodedata
 from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -55,6 +56,9 @@ STATUS_WEIGHTS = [
     ("returned", 5),
 ]
 PAYMENT_METHODS = ["credit_card", "debit_card", "pix", "boleto"]
+EMAIL_DOMAINS = ("gmail.com", "outlook.com", "uol.com.br", "nexamail.com")
+DEMO_LOGIN_EMAIL = "ana.costa@nexamail.com"
+DEMO_LOGIN_NAME = "Ana Costa"
 
 
 def load_company_yaml(path: Path | None = None) -> dict[str, Any]:
@@ -86,7 +90,27 @@ def build_products(rng: SeededRNG, count: int) -> list[ProductRecord]:
     return products
 
 
+def _slug_person(name: str) -> str:
+    """ASCII email local-part from a display name."""
+    normalized = unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
+    return ".".join(part for part in normalized.lower().replace("'", "").split() if part)
+
+
+def allocate_login_email(world: World, name: str, index: int) -> str:
+    """Build a unique realistic login email for ``name``."""
+    used = {item.email.lower() for item in world.customers}
+    slug = _slug_person(name) or f"cliente{index:04d}"
+    domain = EMAIL_DOMAINS[(index - 1) % len(EMAIL_DOMAINS)]
+    candidate = f"{slug}@{domain}"
+    suffix = 2
+    while candidate.lower() in used:
+        candidate = f"{slug}{suffix}@{domain}"
+        suffix += 1
+    return candidate
+
+
 def build_customer(
+    world: World,
     rng: SeededRNG,
     now: datetime,
     *,
@@ -98,12 +122,11 @@ def build_customer(
 ) -> CustomerRecord:
     """Create one customer with a sequential public_id placeholder (reassigned later)."""
     person = name or random_person_name(rng)
-    slug = person.lower().replace(" ", ".")
     return CustomerRecord(
         id=rng.uuid4(),
         public_id=f"CUST-{index:05d}",
         name=person,
-        email=email or f"{slug}.{index:04d}@example.com",
+        email=email or allocate_login_email(world, person, index),
         phone=f"+55119{rng.randint(10000000, 99999999)}",
         customer_tier=tier or _weighted_tier(rng),
         account_status=status,
@@ -299,11 +322,14 @@ def fill_happy_path(
         elif roll > 0.92:
             status = "suspended"
         world.customers.append(
-            build_customer(rng, now, index=len(world.customers) + 1, status=status)
+            build_customer(world, rng, now, index=len(world.customers) + 1, status=status)
         )
 
-    while len(world.orders) < target_orders:
-        customer = rng.choice(world.customers)
+    owned = {customer.id: 0 for customer in world.customers}
+    for order in world.orders:
+        owned[order.customer_id] = owned.get(order.customer_id, 0) + 1
+
+    def _add_random_order(customer: CustomerRecord) -> None:
         product = rng.choice(world.products)
         status = _weighted_order_status(rng)
         created_at = now - timedelta(days=rng.randint(2, 80))
@@ -317,6 +343,15 @@ def fill_happy_path(
             status=status,
             created_at=created_at,
         )
+        owned[customer.id] = owned.get(customer.id, 0) + 1
+
+    for customer in world.customers:
+        if owned.get(customer.id, 0) == 0:
+            _add_random_order(customer)
+
+    while len(world.orders) < target_orders:
+        customer = rng.choice(world.customers)
+        _add_random_order(customer)
 
 
 def assign_public_ids(world: World) -> None:
@@ -425,5 +460,16 @@ def assert_integrity(world: World) -> None:
             raise AssertionError("ticket missing order")
         if ticket.order_id and orders[ticket.order_id].customer_id != ticket.customer_id:
             raise AssertionError("ticket customer/order mismatch")
+
+    orders_by_customer = {item.id: 0 for item in world.customers}
+    for order in world.orders:
+        orders_by_customer[order.customer_id] = orders_by_customer.get(order.customer_id, 0) + 1
+    missing = [item.public_id for item in world.customers if orders_by_customer.get(item.id, 0) < 1]
+    if missing:
+        raise AssertionError(f"customers without orders: {missing}")
+
+    emails = [item.email.lower() for item in world.customers]
+    if len(emails) != len(set(emails)):
+        raise AssertionError("duplicate customer emails")
 
     _ = (scenario_kinds, shipments_by_order)

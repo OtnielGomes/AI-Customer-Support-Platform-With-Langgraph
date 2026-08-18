@@ -60,6 +60,14 @@ def scoped_to_customer(context: ToolContext, customer_id: uuid.UUID) -> bool:
     return customer_id == context.customer_id
 
 
+async def list_customer_orders(session: AsyncSession, customer_id: uuid.UUID) -> list[Order]:
+    """Load orders for one customer, newest first."""
+    result = await session.execute(
+        select(Order).where(Order.customer_id == customer_id).order_by(Order.created_at.desc())
+    )
+    return list(result.scalars().all())
+
+
 def customer_to_dict(customer: Customer) -> dict[str, Any]:
     """Serialize a customer without secrets."""
     return {

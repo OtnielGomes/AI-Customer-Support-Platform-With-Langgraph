@@ -1,6 +1,5 @@
 """Ticket API routes."""
 
-import json
 import logging
 import time
 import uuid
@@ -9,32 +8,36 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Query
 from langchain_core.messages import HumanMessage
 from langgraph.types import Command
-from sqlalchemy import select
 from sse_starlette.sse import EventSourceResponse
 
-from app.api.dependencies import GraphDep, KbContextDep, PrincipalDep, SessionDep
-from app.api.exceptions import TicketConflictError
+from app.api.dependencies import GraphDep, KbContextDep, PrincipalDep, RedisDep, SessionDep
+from app.api.exceptions import CustomerNotFoundError, TicketConflictError
 from app.api.schemas import (
     AgentRunListResponse,
+    ChatMessageListResponse,
+    ChatMessageRequest,
     CloseTicketRequest,
     CreateTicketRequest,
     EscalationReplyRequest,
     ResolutionResponse,
     ResolveRequest,
+    TakeoverRequest,
     TicketListResponse,
     TicketResponse,
 )
-from app.models.customer import Customer
+from app.models.order import Order
 from app.models.ticket import Ticket, TicketIntent, TicketStatus
+from app.models.ticket_message import TicketMessageRole
 from app.observability.langfuse import build_langfuse_handler
 from app.observability.trace_recorder import TraceRecorder
 from app.security.authorization import authorize_route
-from app.services import ticket_service
+from app.security.customer_identity import OptionalCustomerDep, resolve_customer_by_email
+from app.services import chat_service, ticket_service
+from app.services.chat_bus import subscribe_ticket_events
+from app.config import get_settings
 from app.services.graph_runner import (
     build_graph_config,
     invoke_graph,
-    snapshot_to_result,
-    stream_graph_updates,
 )
 
 logger = logging.getLogger(__name__)
@@ -46,19 +49,24 @@ async def create_ticket(
     body: CreateTicketRequest,
     session: SessionDep,
     principal: PrincipalDep,
+    customer: OptionalCustomerDep,
 ) -> TicketResponse:
-    """Create a new support ticket."""
+    """Create a new support ticket for an existing customer."""
     authorize_route(principal, ["write"])
 
-    result = await session.execute(select(Customer).where(Customer.email == body.customer_email))
-    customer = result.scalar_one_or_none()
-    if customer is None:
-        customer = Customer(email=body.customer_email, name=body.customer_name)
-        session.add(customer)
-        await session.flush()
+    found = await resolve_customer_by_email(session, body.customer_email)
+    if customer is not None and found.id != customer.id:
+        raise CustomerNotFoundError(body.customer_email)
+
+    order_id = body.order_id
+    if order_id is not None:
+        order = await session.get(Order, order_id)
+        if order is None or order.customer_id != found.id:
+            raise TicketConflictError("new", "Order does not belong to this customer")
 
     ticket = Ticket(
-        customer_id=customer.id,
+        customer_id=found.id,
+        order_id=order_id,
         subject=body.subject,
         description=body.description,
         status=TicketStatus.OPEN,
@@ -66,15 +74,26 @@ async def create_ticket(
     session.add(ticket)
     await session.flush()
     await session.refresh(ticket, attribute_names=["created_at", "updated_at"])
+    await ticket_service.append_message(
+        session,
+        ticket,
+        TicketMessageRole.CUSTOMER,
+        body.description,
+    )
+    await session.refresh(ticket, attribute_names=["created_at", "updated_at", "last_message_at"])
+    await session.refresh(found)
 
     return TicketResponse(
         id=ticket.id,
         customer_id=ticket.customer_id,
-        customer_email=customer.email,
-        customer_name=customer.name,
+        customer_email=found.email,
+        customer_name=found.name,
         subject=ticket.subject,
         description=ticket.description,
         status=ticket.status,
+        order_id=ticket.order_id,
+        last_message_at=ticket.last_message_at,
+        assigned_agent=ticket.assigned_agent,
         created_at=ticket.created_at,
         updated_at=ticket.updated_at,
     )
@@ -84,6 +103,7 @@ async def create_ticket(
 async def list_tickets(
     session: SessionDep,
     principal: PrincipalDep,
+    customer: OptionalCustomerDep,
     status: Annotated[TicketStatus | None, Query()] = None,
     intent: Annotated[TicketIntent | None, Query()] = None,
     escalated: Annotated[bool | None, Query()] = None,
@@ -92,6 +112,7 @@ async def list_tickets(
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
     order: Annotated[Literal["desc", "asc"], Query()] = "desc",
+    sort: Annotated[Literal["created_at", "last_message_at"], Query()] = "created_at",
 ) -> TicketListResponse:
     """List tickets with filters, search, and pagination."""
     authorize_route(principal, ["read"])
@@ -102,9 +123,11 @@ async def list_tickets(
         escalated=escalated,
         q=q,
         customer_email=customer_email,
+        owner_id=customer.id if customer is not None else None,
         limit=limit,
         offset=offset,
         order=order,
+        sort=sort,
     )
 
 
@@ -113,10 +136,12 @@ async def get_ticket(
     ticket_id: uuid.UUID,
     session: SessionDep,
     principal: PrincipalDep,
+    customer: OptionalCustomerDep,
 ) -> TicketResponse:
     """Get ticket by ID."""
     authorize_route(principal, ["read"])
     ticket = await ticket_service.get_ticket_or_404(session, ticket_id)
+    ticket_service.assert_ticket_owner(ticket, customer)
     return ticket_service.ticket_to_response(ticket)
 
 
@@ -128,10 +153,12 @@ async def resolve_ticket(
     graph: GraphDep,
     principal: PrincipalDep,
     _kb: KbContextDep,
+    customer: OptionalCustomerDep,
 ) -> ResolutionResponse:
     """Resolve a ticket using the support graph."""
     authorize_route(principal, ["write"])
     ticket = await ticket_service.get_ticket_or_404(session, ticket_id)
+    ticket_service.assert_ticket_owner(ticket, customer)
     _reject_closed_ticket(ticket)
     ticket.status = TicketStatus.IN_PROGRESS
     await session.flush()
@@ -172,52 +199,121 @@ async def stream_ticket_resolution(
     session: SessionDep,
     graph: GraphDep,
     principal: PrincipalDep,
+    redis: RedisDep,
     _kb: KbContextDep,
+    customer: OptionalCustomerDep,
 ) -> EventSourceResponse:
-    """Stream graph execution via Server-Sent Events and persist the result."""
+    """Deprecated alias of POST /tickets/{id}/messages."""
     authorize_route(principal, ["write"])
     ticket = await ticket_service.get_ticket_or_404(session, ticket_id)
+    ticket_service.assert_ticket_owner(ticket, customer)
     _reject_closed_ticket(ticket)
-    ticket.status = TicketStatus.IN_PROGRESS
-    await session.flush()
-
-    recorder = TraceRecorder()
-    started_at = time.perf_counter()
-    config = build_graph_config(
-        str(ticket_id),
-        recorder,
-        extra_callbacks=[build_langfuse_handler(str(ticket_id))],
+    content = body.messages[-1].content if body.messages else ticket.description
+    return EventSourceResponse(
+        chat_service.stream_customer_turn(
+            session=session,
+            redis=redis,
+            graph=graph,
+            ticket=ticket,
+            principal=principal,
+            content=content,
+        )
     )
-    payload = _graph_payload(ticket, body, principal.scopes)
+
+
+@router.get("/{ticket_id}/messages", response_model=ChatMessageListResponse)
+async def get_ticket_messages(
+    ticket_id: uuid.UUID,
+    session: SessionDep,
+    principal: PrincipalDep,
+    customer: OptionalCustomerDep,
+) -> ChatMessageListResponse:
+    """Return persisted conversation history."""
+    authorize_route(principal, ["read"])
+    ticket = await ticket_service.get_ticket_or_404(session, ticket_id)
+    ticket_service.assert_ticket_owner(ticket, customer)
+    messages = await ticket_service.list_messages(session, ticket.id)
+    return ChatMessageListResponse(items=[ticket_service.message_to_response(item) for item in messages])
+
+
+@router.post("/{ticket_id}/messages")
+async def post_ticket_message(
+    ticket_id: uuid.UUID,
+    body: ChatMessageRequest,
+    session: SessionDep,
+    graph: GraphDep,
+    principal: PrincipalDep,
+    redis: RedisDep,
+    _kb: KbContextDep,
+    customer: OptionalCustomerDep,
+) -> EventSourceResponse:
+    """Append a chat turn and stream the assistant or human follow-up."""
+    authorize_route(principal, ["write"])
+    ticket = await ticket_service.get_ticket_or_404(session, ticket_id)
+    ticket_service.assert_ticket_owner(ticket, customer)
+    _reject_closed_ticket(ticket)
+    role = body.role
+    if customer is not None and role not in {"human_agent"}:
+        role = "customer"
+    if role in {"customer", "user", "human"}:
+        return EventSourceResponse(
+            chat_service.stream_customer_turn(
+                session=session,
+                redis=redis,
+                graph=graph,
+                ticket=ticket,
+                principal=principal,
+                content=body.content,
+            )
+        )
+    return EventSourceResponse(
+        chat_service.stream_human_turn(
+            session=session,
+            redis=redis,
+            graph=graph,
+            ticket=ticket,
+            principal=principal,
+            content=body.content,
+            agent="console",
+        )
+    )
+
+
+@router.get("/{ticket_id}/events")
+async def ticket_events(
+    ticket_id: uuid.UUID,
+    session: SessionDep,
+    principal: PrincipalDep,
+    redis: RedisDep,
+    customer: OptionalCustomerDep,
+) -> EventSourceResponse:
+    """Subscribe to live chat events for a ticket."""
+    authorize_route(principal, ["read"])
+    ticket = await ticket_service.get_ticket_or_404(session, ticket_id)
+    ticket_service.assert_ticket_owner(ticket, customer)
 
     async def event_generator():
-        error: str | None = None
-        try:
-            async for event in stream_graph_updates(graph, payload, config, recorder):
-                yield {
-                    "event": "update",
-                    "data": json.dumps(event, default=str),
-                }
-        except Exception as exc:
-            logger.exception("Graph stream failed for ticket %s", ticket_id)
-            error = str(exc)
-            yield {"event": "error", "data": json.dumps({"error": error})}
-
-        result = await _snapshot_result(graph, config, error)
-        response = await ticket_service.persist_graph_result(
-            session,
-            ticket,
-            result,
-            recorder,
-            started_at=started_at,
-            error=error,
-        )
-        yield {
-            "event": "done",
-            "data": json.dumps(response.model_dump(mode="json"), default=str),
-        }
+        timeout = max(5, get_settings().chat_stream_heartbeat_seconds)
+        async for item in subscribe_ticket_events(
+            redis, str(ticket.id), idle_timeout=float(timeout)
+        ):
+            yield chat_service.sse_event(str(item.get("event") or "message"), item.get("data"))
 
     return EventSourceResponse(event_generator())
+
+
+@router.post("/{ticket_id}/takeover", response_model=TicketResponse)
+async def takeover_ticket(
+    ticket_id: uuid.UUID,
+    body: TakeoverRequest,
+    session: SessionDep,
+    principal: PrincipalDep,
+) -> TicketResponse:
+    """Assign a human agent to the live conversation."""
+    authorize_route(principal, ["write"])
+    ticket = await ticket_service.get_ticket_or_404(session, ticket_id)
+    ticket = await ticket_service.assign_agent(session, ticket, body.agent)
+    return ticket_service.ticket_to_response(ticket)
 
 
 @router.post("/{ticket_id}/escalation/reply", response_model=ResolutionResponse)
@@ -266,10 +362,12 @@ async def close_ticket(
     body: CloseTicketRequest,
     session: SessionDep,
     principal: PrincipalDep,
+    customer: OptionalCustomerDep,
 ) -> TicketResponse:
     """Close a ticket without resuming the graph."""
     authorize_route(principal, ["write"])
     ticket = await ticket_service.get_ticket_or_404(session, ticket_id)
+    ticket_service.assert_ticket_owner(ticket, customer)
     ticket = await ticket_service.close_ticket(session, ticket, body.reason)
     return ticket_service.ticket_to_response(ticket)
 
@@ -279,10 +377,12 @@ async def confirm_ticket(
     ticket_id: uuid.UUID,
     session: SessionDep,
     principal: PrincipalDep,
+    customer: OptionalCustomerDep,
 ) -> TicketResponse:
     """Customer confirms the assistant's answer resolved the issue."""
     authorize_route(principal, ["write"])
     ticket = await ticket_service.get_ticket_or_404(session, ticket_id)
+    ticket_service.assert_ticket_owner(ticket, customer)
     ticket = await ticket_service.confirm_resolution(session, ticket)
     return ticket_service.ticket_to_response(ticket)
 
@@ -292,9 +392,12 @@ async def list_ticket_runs(
     ticket_id: uuid.UUID,
     session: SessionDep,
     principal: PrincipalDep,
+    customer: OptionalCustomerDep,
 ) -> AgentRunListResponse:
     """List persisted graph runs for a ticket."""
     authorize_route(principal, ["read"])
+    ticket = await ticket_service.get_ticket_or_404(session, ticket_id)
+    ticket_service.assert_ticket_owner(ticket, customer)
     runs = await ticket_service.list_runs(session, ticket_id)
     return AgentRunListResponse(items=[ticket_service.run_to_response(run) for run in runs])
 
@@ -316,15 +419,3 @@ def _reject_closed_ticket(ticket: Ticket) -> None:
     """Prevent graph runs on archived tickets."""
     if ticket.status == TicketStatus.CLOSED:
         raise TicketConflictError(str(ticket.id), "Ticket is closed")
-
-
-async def _snapshot_result(graph, config: dict, error: str | None) -> dict:
-    """Read checkpoint state after a stream, including interrupts."""
-    if error:
-        return {"draft_answer": error, "needs_human": False}
-    try:
-        snapshot = await graph.aget_state(config)
-    except Exception as exc:
-        logger.warning("Failed to read graph snapshot: %s", exc)
-        return {"draft_answer": "Stream completed without snapshot.", "needs_human": False}
-    return snapshot_to_result(snapshot)

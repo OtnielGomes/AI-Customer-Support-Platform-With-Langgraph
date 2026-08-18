@@ -4,11 +4,11 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 
 import { CONSOLE_COOKIE, consoleSessionToken, requireConsoleAuth } from "@/lib/auth";
-import { closeTicket, replyToEscalation } from "@/lib/api/server";
+import { closeTicket, replyToEscalation, takeoverTicket } from "@/lib/api/server";
 
 export async function loginAction(formData: FormData): Promise<{ error: string } | void> {
   const password = String(formData.get("password") ?? "");
-  const nextPath = String(formData.get("next") ?? "/console/tickets");
+  const nextPath = String(formData.get("next") ?? "/console/inbox");
   if (password !== process.env.CONSOLE_PASSWORD) {
     return { error: "Invalid password" };
   }
@@ -19,7 +19,7 @@ export async function loginAction(formData: FormData): Promise<{ error: string }
     path: "/",
     secure: process.env.NODE_ENV === "production",
   });
-  redirect(nextPath.startsWith("/") ? nextPath : "/console/tickets");
+  redirect(nextPath.startsWith("/") ? nextPath : "/console/inbox");
 }
 
 export async function logoutAction(): Promise<void> {
@@ -38,7 +38,7 @@ export async function replyEscalationAction(
     throw new Error("Answer is required");
   }
   await replyToEscalation(ticketId, answer, "console");
-  redirect(`/console/tickets/${ticketId}`);
+  redirect(`/console/inbox/${ticketId}`);
 }
 
 export async function closeTicketAction(
@@ -55,4 +55,17 @@ export async function closeTicketAction(
     };
   }
   redirect(`/console/tickets/${ticketId}`);
+}
+
+export async function takeoverAction(
+  ticketId: string,
+): Promise<{ error: string } | void> {
+  await requireConsoleAuth();
+  try {
+    await takeoverTicket(ticketId, "console");
+  } catch (caught) {
+    return {
+      error: caught instanceof Error ? caught.message : "Could not take over",
+    };
+  }
 }

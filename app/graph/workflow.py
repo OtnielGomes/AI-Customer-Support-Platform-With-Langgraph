@@ -14,6 +14,7 @@ from app.graph.nodes import (
     billing_node,
     escalation_node,
     input_guardrails_node,
+    load_customer_context_node,
     logistics_node,
     output_guardrails_node,
     supervisor_node,
@@ -28,6 +29,7 @@ async def build_support_graph(checkpointer: AsyncPostgresSaver | None = None) ->
     graph = StateGraph(SupportState)
 
     graph.add_node("input_guardrails", input_guardrails_node)
+    graph.add_node("load_customer_context", load_customer_context_node)
     graph.add_node("supervisor", supervisor_node)
     graph.add_node("billing", billing_node)
     graph.add_node("logistics", logistics_node)
@@ -37,7 +39,8 @@ async def build_support_graph(checkpointer: AsyncPostgresSaver | None = None) ->
     graph.add_node("output_guardrails", output_guardrails_node)
 
     graph.set_entry_point("input_guardrails")
-    graph.add_edge("input_guardrails", "supervisor")
+    graph.add_edge("input_guardrails", "load_customer_context")
+    graph.add_edge("load_customer_context", "supervisor")
     graph.add_conditional_edges(
         "supervisor",
         route_after_supervisor,

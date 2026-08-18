@@ -112,3 +112,40 @@ def evaluate_groundedness(answer: str, context: list[dict[str, Any]]) -> dict[st
     overlap = len(answer_words & context_words) / max(len(answer_words), 1)
     passed = overlap >= 0.05 or len(context) == 0
     return {"name": "groundedness", "passed": passed, "overlap": overlap}
+
+
+_EMAIL_ASKS = (
+    "seu e-mail",
+    "seu email",
+    "confirme o e-mail",
+    "confirme o email",
+    "qual o seu e-mail",
+    "what is your email",
+)
+_ORDER_ASKS = (
+    "número do pedido",
+    "numero do pedido",
+    "informe o pedido",
+    "qual o pedido",
+    "order number",
+    "me passe o pedido",
+)
+
+
+def evaluate_identity_first(
+    answer: str,
+    *,
+    order_count: int,
+    authenticated: bool = True,
+) -> dict[str, Any]:
+    """Fail when a logged-in customer is asked for email or a single-order id."""
+    lowered = answer.lower()
+    asked_email = authenticated and any(phrase in lowered for phrase in _EMAIL_ASKS)
+    asked_order = order_count == 1 and any(phrase in lowered for phrase in _ORDER_ASKS)
+    return {
+        "name": "identity_first",
+        "passed": not asked_email and not asked_order,
+        "asked_email": asked_email,
+        "asked_order": asked_order,
+        "order_count": order_count,
+    }

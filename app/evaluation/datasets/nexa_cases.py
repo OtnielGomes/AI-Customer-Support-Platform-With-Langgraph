@@ -29,6 +29,7 @@ def load_nexa_cases() -> list[dict[str, Any]]:
                 "requires_human": bool(item.get("requires_human")),
                 "should_escalate": bool(item.get("requires_human")),
                 "customer_public_id": item.get("customer_public_id"),
+                "customer_email": item.get("customer_email"),
                 "order_public_id": item.get("order_public_id"),
             }
         )

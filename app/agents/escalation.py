@@ -5,24 +5,27 @@ from typing import Any
 
 from langchain_core.messages import AIMessage
 
-ESCALATION_MESSAGE = (
-    "Your request has been escalated to a human support specialist. "
-    "A team member will follow up shortly with an update."
+CUSTOMER_ESCALATION_MESSAGE = (
+    "Vou encaminhar seu caso para um especialista humano. "
+    "Alguém da equipe continua a partir daqui e retorna em breve."
 )
+ESCALATION_MESSAGE = CUSTOMER_ESCALATION_MESSAGE
 
 
 async def run_escalation_agent(
     reason: str,
     draft_answer: str | None = None,
 ) -> dict[str, Any]:
-    """Prepare escalation response and flag human handoff."""
-    message = draft_answer or ESCALATION_MESSAGE
-    if reason:
-        message = f"{message}\n\nEscalation reason: {reason}"
+    """Prepare escalation and flag human handoff.
 
+    ``draft_answer`` is the customer-facing reply. ``reason`` stays on the
+    interrupt payload for the console and must not be concatenated into chat.
+    """
+    message = (draft_answer or "").strip() or CUSTOMER_ESCALATION_MESSAGE
     return {
         "needs_human": True,
         "draft_answer": message,
+        "escalation_reason": reason,
         "messages": [AIMessage(content=message)],
         "escalated_at": datetime.now(UTC).isoformat(),
     }

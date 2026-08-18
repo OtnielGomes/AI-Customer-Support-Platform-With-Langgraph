@@ -12,10 +12,17 @@ from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.api.exceptions import RunNotFoundError, TicketConflictError, TicketNotFoundError
+from app.agents.escalation import CUSTOMER_ESCALATION_MESSAGE
+from app.api.exceptions import (
+    RunNotFoundError,
+    TicketConflictError,
+    TicketNotFoundError,
+    TicketOwnershipError,
+)
 from app.api.schemas import (
     AgentEventResponse,
     AgentRunResponse,
+    ChatMessageResponse,
     ResolutionResponse,
     TicketListResponse,
     TicketResponse,
@@ -25,8 +32,10 @@ from app.models.agent_run import AgentEvent, AgentRun, AgentRunStatus
 from app.models.customer import Customer
 from app.models.resolution import Resolution
 from app.models.ticket import Ticket, TicketIntent, TicketStatus
+from app.models.ticket_message import TicketMessage, TicketMessageRole
 from app.observability.metrics import get_metrics
 from app.observability.trace_recorder import TraceRecorder, extract_interrupt_payload
+from app.security.guardrails import sanitize_customer_answer
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +73,9 @@ def ticket_to_response(ticket: Ticket) -> TicketResponse:
         escalated_at=ticket.escalated_at,
         resolution=resolution_text,
         escalated=escalated,
+        order_id=ticket.order_id,
+        last_message_at=ticket.last_message_at,
+        assigned_agent=ticket.assigned_agent,
         created_at=ticket.created_at,
         updated_at=ticket.updated_at,
     )
@@ -85,6 +97,8 @@ def ticket_to_summary(ticket: Ticket) -> TicketSummary:
         intent=ticket.intent,
         escalated=escalated,
         escalated_at=ticket.escalated_at,
+        last_message_at=ticket.last_message_at,
+        assigned_agent=ticket.assigned_agent,
         created_at=ticket.created_at,
         updated_at=ticket.updated_at,
     )
@@ -98,9 +112,11 @@ async def list_tickets(
     escalated: bool | None = None,
     q: str | None = None,
     customer_email: str | None = None,
+    owner_id: uuid.UUID | None = None,
     limit: int = 20,
     offset: int = 0,
     order: Literal["desc", "asc"] = "desc",
+    sort: Literal["created_at", "last_message_at"] = "created_at",
 ) -> TicketListResponse:
     """Return a filtered, paginated ticket list."""
     filters = _ticket_filters(
@@ -109,11 +125,13 @@ async def list_tickets(
         escalated=escalated,
         q=q,
         customer_email=customer_email,
+        owner_id=owner_id,
     )
     count_stmt = select(func.count()).select_from(Ticket).join(Ticket.customer).where(*filters)
     total = int((await session.execute(count_stmt)).scalar_one())
 
-    order_col = Ticket.created_at.desc() if order == "desc" else Ticket.created_at.asc()
+    sort_col = Ticket.last_message_at if sort == "last_message_at" else Ticket.created_at
+    order_col = sort_col.desc().nulls_last() if order == "desc" else sort_col.asc().nulls_last()
     stmt: Select[tuple[Ticket]] = (
         select(Ticket)
         .join(Ticket.customer)
@@ -190,12 +208,19 @@ async def persist_graph_result(
         ticket.status = TicketStatus.IN_PROGRESS
 
     if interrupt_payload:
-        answer = (
-            str(interrupt_payload.get("draft_answer") or interrupt_payload.get("reason") or "")
-            or "Your request has been escalated to a human support specialist."
-        )
+        raw_answer = str(interrupt_payload.get("draft_answer") or "").strip()
     else:
-        answer = result.get("draft_answer") or ("No answer generated." if not error else str(error))
+        raw_answer = result.get("draft_answer") or (
+            "No answer generated." if not error else str(error)
+        )
+    answer = sanitize_customer_answer(str(raw_answer))
+    if not answer:
+        if awaiting_human or escalated:
+            answer = CUSTOMER_ESCALATION_MESSAGE
+        elif error:
+            answer = str(error)
+        else:
+            answer = "No answer generated."
 
     confidence = result.get("confidence")
     await _upsert_resolution(session, ticket, answer, escalated, confidence)
@@ -211,6 +236,13 @@ async def persist_graph_result(
         awaiting_human=awaiting_human,
         started_at=started_at,
         error=error,
+    )
+    await append_message(
+        session,
+        ticket,
+        TicketMessageRole.ASSISTANT,
+        answer,
+        agent_run_id=run.id,
     )
 
     if escalated:
@@ -326,9 +358,12 @@ def _ticket_filters(
     escalated: bool | None,
     q: str | None,
     customer_email: str | None,
+    owner_id: uuid.UUID | None = None,
 ) -> list[Any]:
     """Build SQLAlchemy filter clauses for ticket listing."""
     filters: list[Any] = []
+    if owner_id is not None:
+        filters.append(Ticket.customer_id == owner_id)
     if status is not None:
         filters.append(Ticket.status == status)
     if intent is not None:
@@ -426,3 +461,68 @@ async def _flush_run(
         )
     await session.flush()
     return run
+
+
+def assert_ticket_owner(ticket: Ticket, customer: Customer | None) -> None:
+    """Reject portal access to another customer's ticket."""
+    if customer is None:
+        return
+    if ticket.customer_id != customer.id:
+        raise TicketOwnershipError(str(ticket.id))
+
+
+def message_to_response(message: TicketMessage) -> ChatMessageResponse:
+    """Map a chat message to the public DTO."""
+    return ChatMessageResponse(
+        id=message.id,
+        ticket_id=message.ticket_id,
+        role=message.role.value,
+        content=message.content,
+        agent_run_id=message.agent_run_id,
+        created_at=message.created_at,
+    )
+
+
+async def append_message(
+    session: AsyncSession,
+    ticket: Ticket,
+    role: TicketMessageRole,
+    content: str,
+    *,
+    agent_run_id: uuid.UUID | None = None,
+    extra: dict[str, Any] | None = None,
+) -> TicketMessage:
+    """Persist one conversation turn and bump inbox ordering."""
+    message = TicketMessage(
+        ticket_id=ticket.id,
+        role=role,
+        content=content,
+        agent_run_id=agent_run_id,
+        extra=extra,
+    )
+    session.add(message)
+    ticket.last_message_at = datetime.now(UTC)
+    if not ticket.description:
+        ticket.description = content
+    if ticket.subject in {"", "Support chat", "Nova conversa"}:
+        ticket.subject = content.strip().splitlines()[0][:80]
+    await session.flush()
+    await session.refresh(message, attribute_names=["created_at"])
+    return message
+
+
+async def list_messages(session: AsyncSession, ticket_id: uuid.UUID) -> list[TicketMessage]:
+    """Return conversation history oldest-first."""
+    result = await session.execute(
+        select(TicketMessage)
+        .where(TicketMessage.ticket_id == ticket_id)
+        .order_by(TicketMessage.created_at.asc())
+    )
+    return list(result.scalars().all())
+
+
+async def assign_agent(session: AsyncSession, ticket: Ticket, agent: str) -> Ticket:
+    """Record human takeover on the ticket."""
+    ticket.assigned_agent = agent
+    await session.flush()
+    return await get_ticket_or_404(session, ticket.id)

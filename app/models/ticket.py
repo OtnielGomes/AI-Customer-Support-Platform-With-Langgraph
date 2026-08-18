@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from app.models.customer import Customer
     from app.models.order import Order
     from app.models.resolution import Resolution
+    from app.models.ticket_message import TicketMessage
 
 
 class TicketStatus(enum.StrEnum):
@@ -65,6 +66,12 @@ class Ticket(Base):
         nullable=True,
     )
     escalated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_message_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+    )
+    assigned_agent: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -79,3 +86,7 @@ class Ticket(Base):
     order: Mapped["Order | None"] = relationship(back_populates="tickets")
     resolution: Mapped["Resolution | None"] = relationship(back_populates="ticket", uselist=False)
     agent_runs: Mapped[list["AgentRun"]] = relationship(back_populates="ticket")
+    messages: Mapped[list["TicketMessage"]] = relationship(
+        back_populates="ticket",
+        order_by="TicketMessage.created_at",
+    )

@@ -33,3 +33,44 @@ def test_validate_output_allows_refund_with_execution() -> None:
     """Output claiming refund with executed flag should pass."""
     result = validate_output("Your refund has been approved.", refund_executed=True)
     assert "refund" in result.lower()
+
+
+def test_normalize_markdown_strips_headings_tables_and_bold() -> None:
+    """Assistant text should not keep decorative markdown."""
+    from app.security.guardrails import normalize_markdown
+
+    cleaned = normalize_markdown(
+        "# Status\nPedido **ORD-01002** enviado.\n| col | a |\n| --- | - |\n"
+    )
+    assert "#" not in cleaned
+    assert "**" not in cleaned
+    assert "|" not in cleaned
+    assert "ORD-01002" in cleaned
+    assert "Status" in cleaned
+
+
+def test_sanitize_customer_answer_strips_escalation_reason() -> None:
+    """Internal escalation labels must not reach the customer."""
+    from app.security.guardrails import sanitize_customer_answer
+
+    reply = (
+        "Verifiquei e houve uma duplicação no pagamento do pedido ORD-01001. "
+        "Posso encaminhar essa tratativa para você agora."
+    )
+    cleaned = sanitize_customer_answer(f"{reply}\n\nEscalation reason: {reply}")
+    assert cleaned == reply
+    assert "Escalation reason" not in cleaned
+
+
+def test_sanitize_customer_answer_collapses_concatenated_copy() -> None:
+    """Repeated identical replies should collapse to one copy."""
+    from app.security.guardrails import sanitize_customer_answer
+
+    reply = (
+        "Seu pedido ORD-01001 não está mais a caminho; ele foi entregue em "
+        "2026-08-07 pela Correios."
+    )
+    cleaned = sanitize_customer_answer(reply + reply)
+    assert cleaned == reply
+    cleaned_paragraphs = sanitize_customer_answer(f"{reply}\n\n{reply}")
+    assert cleaned_paragraphs == reply
