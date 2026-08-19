@@ -2,7 +2,9 @@
 
 from langchain_core.messages import AIMessage, AIMessageChunk
 
-from app.services.chat_service import _token_text
+from types import SimpleNamespace
+
+from app.services.chat_service import _token_text, customer_turn_runs_graph
 
 
 def test_token_text_keeps_incremental_chunks() -> None:
@@ -28,3 +30,11 @@ def test_token_text_skips_guardrail_nodes() -> None:
     chunk = AIMessageChunk(content="internal")
     assert _token_text((chunk, {"langgraph_node": "supervisor"})) == ""
     assert _token_text((chunk, {"langgraph_node": "output_guardrails"})) == ""
+
+
+def test_customer_turn_skips_graph_after_human_takeover() -> None:
+    """A console takeover must silence the AI for later customer messages."""
+    owned = SimpleNamespace(assigned_agent="console")
+    idle = SimpleNamespace(assigned_agent=None)
+    assert customer_turn_runs_graph(owned) is False
+    assert customer_turn_runs_graph(idle) is True

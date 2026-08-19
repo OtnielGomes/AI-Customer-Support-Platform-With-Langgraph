@@ -3,7 +3,7 @@
 from functools import lru_cache
 
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -62,6 +62,20 @@ class Settings(BaseSettings):
         if value.startswith("postgresql://"):
             return value.replace("postgresql://", "postgresql+psycopg://", 1)
         return value
+
+    @model_validator(mode="after")
+    def reject_insecure_production(self) -> "Settings":
+        """Refuse to boot production with development secrets or a missing LLM key."""
+        if self.app_env.strip().lower() != "production":
+            return self
+        if not self.openai_api_key.strip():
+            raise ValueError("OPENAI_API_KEY is required when APP_ENV=production")
+        keys = self.parsed_api_keys()
+        if not keys:
+            raise ValueError("API_KEYS is required when APP_ENV=production")
+        if any(key == "dev-key" for key in keys):
+            raise ValueError("API_KEYS must not use the development key when APP_ENV=production")
+        return self
 
     def parsed_api_keys(self) -> dict[str, list[str]]:
         """Parse API_KEYS into key -> scopes mapping.

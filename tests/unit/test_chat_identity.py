@@ -71,3 +71,4 @@ def test_compose_worker_prompt_includes_identity_block() -> None:
     assert IDENTITY_BLOCK in prompt
     assert "Ana Costa" in prompt
     assert "Never ask for their email" in prompt
+    assert "specialist who will review their problem" in prompt

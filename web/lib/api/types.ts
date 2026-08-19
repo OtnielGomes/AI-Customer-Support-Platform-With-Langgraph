@@ -90,10 +90,16 @@ export interface ChatMessageListResponse {
   items: ChatMessage[];
 }
 
+export interface TicketStatusEvent {
+  status: TicketStatus;
+  assigned_agent: string | null;
+}
+
 export type ChatStreamEvent =
   | { event: "token"; data: { text: string } }
   | { event: "message"; data: ChatMessage }
   | { event: "status"; data: { nodes?: string[] } }
+  | { event: "ticket_status"; data: TicketStatusEvent }
   | { event: "tool"; data: { name: string; status: string } }
   | { event: "done"; data: ResolutionResponse }
   | { event: "error"; data: { error: string } }

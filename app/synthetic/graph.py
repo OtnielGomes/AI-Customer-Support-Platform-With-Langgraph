@@ -59,6 +59,8 @@ PAYMENT_METHODS = ["credit_card", "debit_card", "pix", "boleto"]
 EMAIL_DOMAINS = ("gmail.com", "outlook.com", "uol.com.br", "nexamail.com")
 DEMO_LOGIN_EMAIL = "ana.costa@nexamail.com"
 DEMO_LOGIN_NAME = "Ana Costa"
+DEMO_SHOWCASE_EMAIL = "demo@test.com.br"
+DEMO_SHOWCASE_NAME = "Demo Tester"
 
 
 def load_company_yaml(path: Path | None = None) -> dict[str, Any]:
@@ -350,7 +352,12 @@ def fill_happy_path(
             _add_random_order(customer)
 
     while len(world.orders) < target_orders:
-        customer = rng.choice(world.customers)
+        eligible = [
+            item
+            for item in world.customers
+            if item.email.lower() != DEMO_SHOWCASE_EMAIL
+        ]
+        customer = rng.choice(eligible or world.customers)
         _add_random_order(customer)
 
 

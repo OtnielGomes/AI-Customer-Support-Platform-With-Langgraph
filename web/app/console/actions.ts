@@ -1,15 +1,17 @@
 "use server";
 
 import { cookies } from "next/headers";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { CONSOLE_COOKIE, consoleSessionToken, requireConsoleAuth } from "@/lib/auth";
+import { CONSOLE_COOKIE, consoleSessionToken, requireConsoleAuth, tokensMatch } from "@/lib/auth";
 import { closeTicket, replyToEscalation, takeoverTicket } from "@/lib/api/server";
 
 export async function loginAction(formData: FormData): Promise<{ error: string } | void> {
   const password = String(formData.get("password") ?? "");
   const nextPath = String(formData.get("next") ?? "/console/inbox");
-  if (password !== process.env.CONSOLE_PASSWORD) {
+  const expected = process.env.CONSOLE_PASSWORD ?? "";
+  if (!expected || !tokensMatch(password, expected)) {
     return { error: "Invalid password" };
   }
   const jar = await cookies();
@@ -68,4 +70,22 @@ export async function takeoverAction(
       error: caught instanceof Error ? caught.message : "Could not take over",
     };
   }
+  revalidatePath(`/console/inbox/${ticketId}`);
+}
+
+export async function closeConversationAction(
+  ticketId: string,
+  formData: FormData,
+): Promise<{ error: string } | void> {
+  await requireConsoleAuth();
+  const reason = String(formData.get("reason") ?? "").trim();
+  try {
+    await closeTicket(ticketId, reason || undefined);
+  } catch (caught) {
+    return {
+      error: caught instanceof Error ? caught.message : "Could not close ticket",
+    };
+  }
+  revalidatePath("/console/inbox");
+  revalidatePath(`/console/inbox/${ticketId}`);
 }

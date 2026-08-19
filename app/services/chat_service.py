@@ -125,6 +125,15 @@ async def publish_and_sse(
     return sse_event(event, data)
 
 
+def customer_turn_runs_graph(ticket: Ticket) -> bool:
+    """Return True when a customer message should invoke the AI graph.
+
+    After a console agent takes over, later customer turns stay in the
+    transcript for the human. Running the graph here would talk over them.
+    """
+    return not bool((ticket.assigned_agent or "").strip())
+
+
 async def stream_customer_turn(
     *,
     session,
@@ -136,7 +145,9 @@ async def stream_customer_turn(
 ) -> AsyncIterator[dict[str, str]]:
     """Persist a customer message, run the graph, and yield SSE events."""
     async def _inner() -> AsyncIterator[dict[str, str]]:
-        ticket.status = TicketStatus.IN_PROGRESS
+        run_graph = customer_turn_runs_graph(ticket)
+        if run_graph:
+            ticket.status = TicketStatus.IN_PROGRESS
         message = await ticket_service.append_message(
             session,
             ticket,
@@ -145,6 +156,19 @@ async def stream_customer_turn(
         )
         payload = ticket_service.message_to_response(message).model_dump(mode="json")
         yield await publish_and_sse(redis, str(ticket.id), "message", payload)
+        if not run_graph:
+            yield await publish_and_sse(
+                redis,
+                str(ticket.id),
+                "done",
+                {
+                    "ticket_id": str(ticket.id),
+                    "answer": "",
+                    "awaiting_human": True,
+                    "escalated": ticket.status == TicketStatus.ESCALATED,
+                },
+            )
+            return
 
         recorder = TraceRecorder()
         started_at = time.perf_counter()

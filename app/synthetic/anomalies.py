@@ -27,6 +27,8 @@ ANOMALY_KINDS = [
     "fraud_risk",
     "final_sale",
     "gold_tier",
+    "failed_payment",
+    "happy_path",
 ]
 
 

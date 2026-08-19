@@ -34,6 +34,7 @@ from app.models.shipment import Shipment
 from app.models.synthetic_scenario import SyntheticScenario
 from app.models.ticket import Ticket, TicketIntent, TicketStatus
 from app.models.ticket_message import TicketMessage, TicketMessageRole
+from app.synthetic.graph import DEMO_SHOWCASE_EMAIL, DEMO_SHOWCASE_NAME
 from app.synthetic.records import World
 
 logger = logging.getLogger(__name__)
@@ -45,8 +46,8 @@ CHECKPOINT_TABLES = ("checkpoint_writes", "checkpoint_blobs", "checkpoints")
 
 OPERATIONAL_TABLES = (
     AgentEvent,
-    AgentRun,
     TicketMessage,
+    AgentRun,
     Resolution,
     SyntheticScenario,
     Ticket,
@@ -285,6 +286,7 @@ def export_scenarios(world: World, path: Path | None = None) -> Path:
     target.write_text(json.dumps(payload, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
     logger.info("Wrote %s fixtures to %s", len(payload), target)
     _export_demo_logins(world, customers, orders, target.parent / "demo_logins.json")
+    _export_manual_test_guide(world, customers, orders, target.parent / "demo_manual_tests.md")
     return target
 
 
@@ -323,6 +325,49 @@ def _export_demo_logins(
         unique.append(row)
     path.write_text(json.dumps(unique, indent=2, ensure_ascii=True) + "\n", encoding="utf-8")
     logger.info("Wrote %s demo logins to %s", len(unique), path)
+
+
+def _export_manual_test_guide(
+    world: World,
+    customers: dict,
+    orders: dict,
+    path: Path,
+) -> None:
+    """Write a portal checklist for the dedicated demo customer."""
+    if not any(item.email.lower() == DEMO_SHOWCASE_EMAIL for item in customers.values()):
+        path.write_text("# Demo customer was not generated.\n", encoding="utf-8")
+        return
+    rows = [
+        scenario
+        for scenario in world.scenarios
+        if scenario.id.startswith("SCN-DEMO-")
+    ]
+    lines = [
+        "# Demo customer — manual agent tests",
+        "",
+        f"Portal login: `{DEMO_SHOWCASE_EMAIL}` ({DEMO_SHOWCASE_NAME}).",
+        "Open a new conversation, pick the order, and paste the suggested message.",
+        "",
+        "| Scenario | Order | Kind | Message | Expected tools |"
+        " Policy | Expected resolution | Human? |",
+        "|----------|-------|------|---------|----------------|"
+        "--------|---------------------|--------|",
+    ]
+    for scenario in rows:
+        order = orders.get(scenario.order_id) if scenario.order_id else None
+        order_id = order.public_id if order else "—"
+        tools = ", ".join(scenario.expected_tools) or "—"
+        human = "yes" if scenario.requires_human else "no"
+        message = scenario.user_message_pt.replace("|", "/")
+        row = (
+            f"| `{scenario.id}` | `{order_id}` | `{scenario.kind}` | {message} |"
+            f" `{tools}` | `{scenario.expected_policy}` |"
+            f" `{scenario.expected_resolution}` | {human} |"
+        )
+        lines.append(row)
+    lines.append("")
+    path.write_text("\n".join(lines), encoding="utf-8")
+    logger.info("Wrote %s manual demo cases to %s", len(rows), path)
 
 
 async def operational_row_count(session: AsyncSession) -> int:

@@ -57,11 +57,18 @@ services:
       - "3000:3000"
     environment:
       SUPPORT_API_URL: http://api:8000
-      SUPPORT_API_KEY: ${SUPPORT_API_KEY:-dev-key}
-      CONSOLE_PASSWORD: ${CONSOLE_PASSWORD:-console}
+      SUPPORT_API_KEY: ${SUPPORT_API_KEY}
+      CONSOLE_PASSWORD: ${CONSOLE_PASSWORD}
+      PORTAL_SESSION_SECRET: ${PORTAL_SESSION_SECRET}
     depends_on:
       api:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000 >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
 
 volumes:
   pgdata:

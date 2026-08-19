@@ -85,22 +85,6 @@ export function listTickets(params: URLSearchParams): Promise<TicketListResponse
   return apiFetch<TicketListResponse>(`/tickets${query ? `?${query}` : ""}`);
 }
 
-export function listEscalations(limit = 50): Promise<TicketListResponse> {
-  return apiFetch<TicketListResponse>(`/escalations?limit=${limit}`);
-}
-
-export function resolveTicket(
-  ticketId: string,
-  content: string,
-): Promise<ResolutionResponse> {
-  return apiFetch<ResolutionResponse>(`/tickets/${ticketId}/resolve`, {
-    method: "POST",
-    body: JSON.stringify({
-      messages: [{ role: "user", content }],
-    }),
-  });
-}
-
 export function replyToEscalation(
   ticketId: string,
   answer: string,

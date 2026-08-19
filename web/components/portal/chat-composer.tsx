@@ -4,11 +4,18 @@ export function ChatComposer({
   disabled,
   placeholder,
   onSend,
+  variant = "portal",
 }: {
   disabled: boolean;
   placeholder: string;
   onSend: (content: string) => void;
+  variant?: "portal" | "console";
 }) {
+  const fieldClass =
+    variant === "console"
+      ? "rounded-xl border border-white/15 bg-[#0f1216] px-3 py-2 text-[#f2efe9] placeholder:text-[#8b939c] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white/40"
+      : "rounded-xl border border-[var(--line)] bg-white px-3 py-2 text-[var(--ink)] placeholder:text-[var(--muted)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]";
+
   return (
     <form
       className="grid gap-3"
@@ -29,7 +36,7 @@ export function ChatComposer({
         rows={3}
         placeholder={placeholder}
         disabled={disabled}
-        className="rounded-xl border border-[var(--line)] bg-white px-3 py-2"
+        className={fieldClass}
       />
       <button
         type="submit"

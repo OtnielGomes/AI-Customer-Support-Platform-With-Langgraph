@@ -1,0 +1,16 @@
+.git
+.github
+.cursor
+.agents
+.venv
+__pycache__
+*.py[cod]
+.env
+.env.*
+!.env.example
+web
+node_modules
+.pytest_cache
+.coverage
+.DS_Store
+Thumbs.db

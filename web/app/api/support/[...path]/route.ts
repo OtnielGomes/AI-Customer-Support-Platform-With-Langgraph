@@ -1,7 +1,8 @@
 import { cookies } from "next/headers";
 import { NextRequest } from "next/server";
 
-import { PORTAL_COOKIE, parsePortalSession } from "@/lib/auth";
+import { authorizeBffRequest } from "@/lib/bff-policy";
+import { PORTAL_COOKIE, isConsoleAuthenticated, parsePortalSession } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
@@ -9,6 +10,24 @@ const API_URL = process.env.SUPPORT_API_URL ?? "http://localhost:8000";
 const API_KEY = process.env.SUPPORT_API_KEY ?? "";
 
 async function proxy(request: NextRequest, path: string[]): Promise<Response> {
+  const jar = await cookies();
+  let portalEmail: string | null = null;
+  try {
+    portalEmail = parsePortalSession(jar.get(PORTAL_COOKIE)?.value);
+  } catch {
+    portalEmail = null;
+  }
+  const consoleOk = await isConsoleAuthenticated();
+  const decision = authorizeBffRequest({
+    method: request.method,
+    path,
+    hasPortalSession: Boolean(portalEmail),
+    hasConsoleSession: consoleOk,
+  });
+  if (decision === "deny") {
+    return Response.json({ detail: "Unauthorized" }, { status: 401 });
+  }
+
   const target = new URL(`${API_URL}/${path.join("/")}`);
   target.search = request.nextUrl.search;
 
@@ -18,10 +37,8 @@ async function proxy(request: NextRequest, path: string[]): Promise<Response> {
   if (contentType) {
     headers.set("content-type", contentType);
   }
-  const jar = await cookies();
-  const email = parsePortalSession(jar.get(PORTAL_COOKIE)?.value);
-  if (email) {
-    headers.set("X-Customer-Email", email);
+  if (decision === "portal" && portalEmail) {
+    headers.set("X-Customer-Email", portalEmail);
   }
 
   const method = request.method;

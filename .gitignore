@@ -9,6 +9,11 @@ build/
 # Environment
 .env
 .env.local
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
 AGENTS.md
 skills-lock.json
 .cursor/

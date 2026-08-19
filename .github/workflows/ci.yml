@@ -88,12 +88,18 @@ jobs:
         run: npm run typecheck
       - name: Lint
         run: npm run lint
+      - name: Unit tests
+        run: npm test
+        env:
+          PORTAL_SESSION_SECRET: test-portal-secret
+          CONSOLE_PASSWORD: console
       - name: Build
         run: npm run build
         env:
           SUPPORT_API_URL: http://localhost:8000
           SUPPORT_API_KEY: test-key
           CONSOLE_PASSWORD: console
+          PORTAL_SESSION_SECRET: test-portal-secret
 
   docker-build:
     runs-on: ubuntu-latest

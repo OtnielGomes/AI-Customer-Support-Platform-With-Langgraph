@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const CONSOLE_COOKIE = "console_session";
-const PORTAL_COOKIE = "portal_session";
+import {
+  CONSOLE_COOKIE,
+  PORTAL_COOKIE,
+  isValidConsoleSession,
+  parsePortalSessionEdge,
+} from "@/lib/auth-edge";
 
-export function proxy(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
 
   if (path.startsWith("/console")) {
     const token = request.cookies.get(CONSOLE_COOKIE)?.value;
-    if (!token) {
+    if (!(await isValidConsoleSession(token))) {
       const login = new URL("/login", request.url);
       login.searchParams.set("next", path);
       return NextResponse.redirect(login);
@@ -20,7 +24,7 @@ export function proxy(request: NextRequest) {
     path === "/" || path.startsWith("/tickets/") || path.startsWith("/chat");
   if (portalProtected) {
     const token = request.cookies.get(PORTAL_COOKIE)?.value;
-    if (!token) {
+    if (!(await parsePortalSessionEdge(token))) {
       return NextResponse.redirect(new URL("/portal/login", request.url));
     }
   }

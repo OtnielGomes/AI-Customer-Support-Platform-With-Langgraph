@@ -86,6 +86,7 @@ Customer portal login is email-only (`/portal/login`). Unknown emails are reject
 
 | Email | Name | Typical scenario |
 |-------|------|------------------|
+| `demo@test.com.br` | Demo Tester | **10 pedidos** — roteiro em [`data/fixtures/demo_manual_tests.md`](data/fixtures/demo_manual_tests.md) |
 | `ana.costa@nexamail.com` | Ana Costa | Double charge (`SCN-DOUBLE-PAY-001`, 1 pedido) |
 | `pedro.lima@outlook.com` | Pedro Lima | Delayed shipment |
 | `rafaela.fernandes@uol.com.br` | Rafaela Fernandes | Delivered but missing |

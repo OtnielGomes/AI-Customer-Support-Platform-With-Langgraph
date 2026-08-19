@@ -21,6 +21,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app /app
+COPY alembic.ini ./
+COPY migrations ./migrations
+COPY data ./data
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 EXPOSE 8000
-CMD ["fastapi", "run", "app/main.py", "--host", "0.0.0.0", "--port", "8000"]
+ENTRYPOINT ["/entrypoint.sh"]

@@ -1,6 +1,13 @@
-export function TypingIndicator({ visible }: { visible: boolean }) {
+export function TypingIndicator({
+  visible,
+  variant = "portal",
+}: {
+  visible: boolean;
+  variant?: "portal" | "console";
+}) {
   if (!visible) {
     return null;
   }
-  return <p className="text-sm text-[var(--muted)]">O assistente está escrevendo…</p>;
+  const tone = variant === "console" ? "text-[#9aa3ad]" : "text-[var(--muted)]";
+  return <p className={`text-sm ${tone}`}>O assistente está escrevendo…</p>;
 }

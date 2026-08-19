@@ -25,6 +25,7 @@ from app.api.schemas import (
     TicketListResponse,
     TicketResponse,
 )
+from app.config import get_settings
 from app.models.order import Order
 from app.models.ticket import Ticket, TicketIntent, TicketStatus
 from app.models.ticket_message import TicketMessageRole
@@ -33,8 +34,7 @@ from app.observability.trace_recorder import TraceRecorder
 from app.security.authorization import authorize_route
 from app.security.customer_identity import OptionalCustomerDep, resolve_customer_by_email
 from app.services import chat_service, ticket_service
-from app.services.chat_bus import subscribe_ticket_events
-from app.config import get_settings
+from app.services.chat_bus import publish_ticket_event, subscribe_ticket_events
 from app.services.graph_runner import (
     build_graph_config,
     invoke_graph,
@@ -233,7 +233,9 @@ async def get_ticket_messages(
     ticket = await ticket_service.get_ticket_or_404(session, ticket_id)
     ticket_service.assert_ticket_owner(ticket, customer)
     messages = await ticket_service.list_messages(session, ticket.id)
-    return ChatMessageListResponse(items=[ticket_service.message_to_response(item) for item in messages])
+    return ChatMessageListResponse(
+        items=[ticket_service.message_to_response(item) for item in messages]
+    )
 
 
 @router.post("/{ticket_id}/messages")
@@ -308,11 +310,13 @@ async def takeover_ticket(
     body: TakeoverRequest,
     session: SessionDep,
     principal: PrincipalDep,
+    redis: RedisDep,
 ) -> TicketResponse:
     """Assign a human agent to the live conversation."""
     authorize_route(principal, ["write"])
     ticket = await ticket_service.get_ticket_or_404(session, ticket_id)
     ticket = await ticket_service.assign_agent(session, ticket, body.agent)
+    await _publish_ticket_status(redis, ticket)
     return ticket_service.ticket_to_response(ticket)
 
 
@@ -363,12 +367,14 @@ async def close_ticket(
     session: SessionDep,
     principal: PrincipalDep,
     customer: OptionalCustomerDep,
+    redis: RedisDep,
 ) -> TicketResponse:
     """Close a ticket without resuming the graph."""
     authorize_route(principal, ["write"])
     ticket = await ticket_service.get_ticket_or_404(session, ticket_id)
     ticket_service.assert_ticket_owner(ticket, customer)
-    ticket = await ticket_service.close_ticket(session, ticket, body.reason)
+    ticket, message = await ticket_service.close_ticket(session, ticket, body.reason)
+    await _publish_lifecycle(redis, ticket, message)
     return ticket_service.ticket_to_response(ticket)
 
 
@@ -378,12 +384,14 @@ async def confirm_ticket(
     session: SessionDep,
     principal: PrincipalDep,
     customer: OptionalCustomerDep,
+    redis: RedisDep,
 ) -> TicketResponse:
     """Customer confirms the assistant's answer resolved the issue."""
     authorize_route(principal, ["write"])
     ticket = await ticket_service.get_ticket_or_404(session, ticket_id)
     ticket_service.assert_ticket_owner(ticket, customer)
-    ticket = await ticket_service.confirm_resolution(session, ticket)
+    ticket, message = await ticket_service.confirm_resolution(session, ticket)
+    await _publish_lifecycle(redis, ticket, message)
     return ticket_service.ticket_to_response(ticket)
 
 
@@ -419,3 +427,28 @@ def _reject_closed_ticket(ticket: Ticket) -> None:
     """Prevent graph runs on archived tickets."""
     if ticket.status == TicketStatus.CLOSED:
         raise TicketConflictError(str(ticket.id), "Ticket is closed")
+
+
+async def _publish_lifecycle(redis, ticket: Ticket, message) -> None:
+    """Fan-out a system notice and the new ticket status to live subscribers."""
+    if message is not None:
+        await publish_ticket_event(
+            redis,
+            str(ticket.id),
+            "message",
+            ticket_service.message_to_response(message).model_dump(mode="json"),
+        )
+    await _publish_ticket_status(redis, ticket)
+
+
+async def _publish_ticket_status(redis, ticket: Ticket) -> None:
+    """Notify subscribers that ticket status or assignment changed."""
+    await publish_ticket_event(
+        redis,
+        str(ticket.id),
+        "ticket_status",
+        {
+            "status": ticket.status.value,
+            "assigned_agent": ticket.assigned_agent,
+        },
+    )

@@ -10,6 +10,16 @@ const AssistantMarkdown = dynamic(() => import("./assistant-markdown"), {
 });
 
 export function ChatBubble({ message }: { message: ChatMessage }) {
+  if (message.role === "system") {
+    return (
+      <div className="flex justify-center">
+        <p className="max-w-[90%] px-3 py-1 text-center text-xs opacity-70">
+          {message.content}
+        </p>
+      </div>
+    );
+  }
+
   const isCustomer = message.role === "customer";
   const isHuman = message.role === "human_agent";
   const align = isCustomer ? "justify-end" : "justify-start";

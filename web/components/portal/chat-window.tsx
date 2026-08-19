@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { ChatComposer } from "@/components/portal/chat-composer";
@@ -19,7 +19,19 @@ export function ChatWindow({
   initialMessages: ChatMessage[];
   variant?: "portal" | "console";
 }) {
-  const { messages, draft, busy, error, send } = useChatStream(ticket.id, initialMessages);
+  const { messages, draft, busy, error, status, setStatus, send, setError } = useChatStream(
+    ticket.id,
+    initialMessages,
+    ticket.status,
+  );
+  const [confirming, startConfirm] = useTransition();
+  const isConsole = variant === "console";
+  const closed = status === "closed";
+  const canConfirm =
+    variant === "portal" &&
+    !closed &&
+    status !== "resolved" &&
+    messages.some((item) => item.role === "assistant");
 
   useEffect(() => {
     const key = `pending-chat:${ticket.id}`;
@@ -42,34 +54,69 @@ export function ChatWindow({
     });
   }
 
+  const muted = isConsole ? "text-[#9aa3ad]" : "text-[var(--muted)]";
+  const errorTone = isConsole ? "text-rose-300" : "text-rose-700";
+
   return (
     <div className="grid gap-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-sm text-[var(--muted)]">Conversa {ticket.id.slice(0, 8)}</p>
+          <p className={`text-sm ${muted}`}>Conversa {ticket.id.slice(0, 8)}</p>
           <h1 className="font-[family-name:var(--font-serif)] text-2xl">{ticket.subject}</h1>
         </div>
-        <StatusBadge status={ticket.status} />
+        <StatusBadge status={status} />
       </div>
       <section
         className={`max-h-[60vh] overflow-y-auto rounded-2xl border p-5 ${
-          variant === "console" ? "border-white/10" : "border-[var(--line)] bg-[var(--card)]"
+          isConsole ? "border-white/10" : "border-[var(--line)] bg-[var(--card)]"
         }`}
       >
         <ChatTranscript messages={live} />
-        <TypingIndicator visible={busy && !draft} />
+        <TypingIndicator visible={busy && !draft} variant={variant} />
       </section>
-      {error ? <p className="text-sm text-rose-700">{error}</p> : null}
-      {ticket.status === "closed" ? (
-        <p className="text-sm text-[var(--muted)]">Esta conversa foi encerrada.</p>
+      {error ? <p className={`text-sm ${errorTone}`}>{error}</p> : null}
+      {closed ? (
+        <p className={`text-sm ${muted}`}>Esta conversa foi encerrada.</p>
       ) : (
-        <ChatComposer
-          disabled={busy}
-          placeholder="Escreva sua mensagem…"
-          onSend={(content) => {
-            void send(content, ticket.id, variant === "console" ? "human_agent" : "customer");
-          }}
-        />
+        <>
+          <ChatComposer
+            variant={variant}
+            disabled={busy}
+            placeholder="Escreva sua mensagem…"
+            onSend={(content) => {
+              void send(content, ticket.id, isConsole ? "human_agent" : "customer");
+            }}
+          />
+          {canConfirm ? (
+            <button
+              type="button"
+              disabled={confirming || busy}
+              onClick={() => {
+                startConfirm(async () => {
+                  setError(null);
+                  const response = await fetch(`/api/support/tickets/${ticket.id}/confirm`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                  });
+                  if (!response.ok) {
+                    setError((await response.text()) || "Não foi possível marcar como resolvido");
+                    return;
+                  }
+                  setStatus("resolved");
+                });
+              }}
+              className="justify-self-start text-sm text-[var(--muted)] underline-offset-2 hover:underline disabled:opacity-60"
+            >
+              {confirming ? "Marcando…" : "Marcar como resolvido"}
+            </button>
+          ) : null}
+          {status === "resolved" ? (
+            <p className={`text-sm ${muted}`}>
+              Você marcou esta conversa como resolvida. Envie outra mensagem se ainda precisar de
+              ajuda.
+            </p>
+          ) : null}
+        </>
       )}
     </div>
   );

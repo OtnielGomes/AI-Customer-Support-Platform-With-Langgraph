@@ -265,12 +265,22 @@ async def persist_graph_result(
     )
 
 
-async def close_ticket(session: AsyncSession, ticket: Ticket, reason: str | None) -> Ticket:
-    """Mark a ticket closed without resuming the graph."""
+CLOSE_SYSTEM_MESSAGE = "Conversa encerrada pelo atendente."
+CONFIRM_SYSTEM_MESSAGE = "Você marcou esta conversa como resolvida."
+
+
+async def close_ticket(
+    session: AsyncSession, ticket: Ticket, reason: str | None
+) -> tuple[Ticket, TicketMessage]:
+    """Mark a ticket closed without resuming the graph.
+
+    Clears human assignment and appends a customer-visible system notice.
+    """
     if ticket.status == TicketStatus.CLOSED:
         raise TicketConflictError(str(ticket.id), "Ticket is already closed")
     was_escalated = ticket.status == TicketStatus.ESCALATED
     ticket.status = TicketStatus.CLOSED
+    ticket.assigned_agent = None
     if reason:
         note = f"Closed by agent. {reason}"
         if ticket.resolution is None:
@@ -283,20 +293,31 @@ async def close_ticket(session: AsyncSession, ticket: Ticket, reason: str | None
         else:
             ticket.resolution.answer = f"{ticket.resolution.answer}\n\n{note}"
     await session.flush()
+    message = await append_message(session, ticket, TicketMessageRole.SYSTEM, CLOSE_SYSTEM_MESSAGE)
     # Re-load relationships: flush expires `updated_at` (onupdate) and lazy IO
     # in `ticket_to_response` raises MissingGreenlet under AsyncSession.
-    return await get_ticket_or_404(session, ticket.id)
+    reloaded = await get_ticket_or_404(session, ticket.id)
+    return reloaded, message
 
 
-async def confirm_resolution(session: AsyncSession, ticket: Ticket) -> Ticket:
+async def confirm_resolution(
+    session: AsyncSession, ticket: Ticket
+) -> tuple[Ticket, TicketMessage | None]:
     """Mark a ticket resolved after the customer confirms the answer helped."""
     if ticket.status == TicketStatus.CLOSED:
         raise TicketConflictError(str(ticket.id), "Ticket is already closed")
     if ticket.status == TicketStatus.RESOLVED:
-        return ticket
+        return ticket, None
     ticket.status = TicketStatus.RESOLVED
     await session.flush()
-    return await get_ticket_or_404(session, ticket.id)
+    message = await append_message(
+        session,
+        ticket,
+        TicketMessageRole.SYSTEM,
+        CONFIRM_SYSTEM_MESSAGE,
+    )
+    reloaded = await get_ticket_or_404(session, ticket.id)
+    return reloaded, message
 
 
 async def list_runs(session: AsyncSession, ticket_id: uuid.UUID) -> list[AgentRun]:
@@ -505,10 +526,11 @@ async def append_message(
     )
     session.add(message)
     ticket.last_message_at = datetime.now(UTC)
-    if not ticket.description:
-        ticket.description = content
-    if ticket.subject in {"", "Support chat", "Nova conversa"}:
-        ticket.subject = content.strip().splitlines()[0][:80]
+    if role != TicketMessageRole.SYSTEM:
+        if not ticket.description:
+            ticket.description = content
+        if ticket.subject in {"", "Support chat", "Nova conversa"}:
+            ticket.subject = content.strip().splitlines()[0][:80]
     await session.flush()
     await session.refresh(message, attribute_names=["created_at"])
     return message

@@ -182,6 +182,7 @@ Frontend (`web/.env.local`, copy from `web/.env.example`):
 
 Seed emails are realistic and unique. Unknown emails are rejected at `/portal/session`.
 
+* `demo@test.com.br` — Demo Tester, 10 pedidos / 10 casos manuais (`SCN-DEMO-01` … `SCN-DEMO-10`). Roteiro: `data/fixtures/demo_manual_tests.md`
 * `ana.costa@nexamail.com` — Ana Costa, double charge (`SCN-DOUBLE-PAY-001`), one order
 * `pedro.lima@outlook.com` — delayed shipment
 * `rafaela.fernandes@uol.com.br` — delivered but missing

@@ -123,6 +123,7 @@ def test_demo_customer_email() -> None:
     """Local demo keeps a stable portal login email."""
     world = generate_world(profile="demo", seed=42)
     assert world.customers[0].email == "ana.costa@nexamail.com"
+    assert any(item.email == "demo@test.com.br" for item in world.customers)
     assert all("@" in item.email for item in world.customers)
     assert not any(item.email.endswith("@example.com") for item in world.customers)
     assert all(

@@ -4,13 +4,21 @@ import { cookies } from "next/headers";
 export const CONSOLE_COOKIE = "console_session";
 export const PORTAL_COOKIE = "portal_session";
 
+function requiredEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`${name} is not configured`);
+  }
+  return value;
+}
+
 export function consoleSessionToken(): string {
-  const password = process.env.CONSOLE_PASSWORD ?? "";
+  const password = requiredEnv("CONSOLE_PASSWORD");
   return createHmac("sha256", password).update("console-ok").digest("hex");
 }
 
 export function portalSessionToken(email: string): string {
-  const secret = process.env.PORTAL_SESSION_SECRET ?? "dev-portal-secret";
+  const secret = requiredEnv("PORTAL_SESSION_SECRET");
   const payload = email.trim().toLowerCase();
   const signature = createHmac("sha256", secret).update(payload).digest("hex");
   return `${payload}|${signature}`;
@@ -46,7 +54,11 @@ export async function isConsoleAuthenticated(): Promise<boolean> {
   if (!value) {
     return false;
   }
-  return tokensMatch(value, consoleSessionToken());
+  try {
+    return tokensMatch(value, consoleSessionToken());
+  } catch {
+    return false;
+  }
 }
 
 export async function requireConsoleAuth(): Promise<void> {
@@ -57,5 +69,9 @@ export async function requireConsoleAuth(): Promise<void> {
 
 export async function getPortalEmail(): Promise<string | null> {
   const jar = await cookies();
-  return parsePortalSession(jar.get(PORTAL_COOKIE)?.value);
+  try {
+    return parsePortalSession(jar.get(PORTAL_COOKIE)?.value);
+  } catch {
+    return null;
+  }
 }

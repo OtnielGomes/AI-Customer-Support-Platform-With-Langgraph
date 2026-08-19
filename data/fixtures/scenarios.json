@@ -236,5 +236,165 @@
     "expected_policy": "security",
     "expected_resolution": "refuse",
     "requires_human": true
+  },
+  {
+    "id": "SCN-DEMO-01",
+    "kind": "double_payment",
+    "customer_public_id": "CUST-00011",
+    "customer_email": "demo@test.com.br",
+    "order_public_id": "ORD-01013",
+    "user_message": "Fui cobrado duas vezes pelo mesmo pedido.",
+    "expected_intent": "billing",
+    "expected_tools": [
+      "get_order",
+      "get_payments"
+    ],
+    "expected_policy": "payment_policy",
+    "expected_resolution": "refund_duplicate_charge",
+    "requires_human": false
+  },
+  {
+    "id": "SCN-DEMO-02",
+    "kind": "delayed_shipment",
+    "customer_public_id": "CUST-00011",
+    "customer_email": "demo@test.com.br",
+    "order_public_id": "ORD-01014",
+    "user_message": "Meu pedido esta atrasado.",
+    "expected_intent": "logistics",
+    "expected_tools": [
+      "get_order",
+      "get_shipment"
+    ],
+    "expected_policy": "shipping_policy",
+    "expected_resolution": "explain_delay",
+    "requires_human": false
+  },
+  {
+    "id": "SCN-DEMO-03",
+    "kind": "delivered_missing",
+    "customer_public_id": "CUST-00011",
+    "customer_email": "demo@test.com.br",
+    "order_public_id": "ORD-01015",
+    "user_message": "Aparece como entregue, mas nao recebi.",
+    "expected_intent": "logistics",
+    "expected_tools": [
+      "get_order",
+      "get_shipment"
+    ],
+    "expected_policy": "shipping_policy",
+    "expected_resolution": "investigate_missing_delivery",
+    "requires_human": true
+  },
+  {
+    "id": "SCN-DEMO-04",
+    "kind": "refund_outside_window",
+    "customer_public_id": "CUST-00011",
+    "customer_email": "demo@test.com.br",
+    "order_public_id": "ORD-01016",
+    "user_message": "Quero meu dinheiro de volta.",
+    "expected_intent": "billing",
+    "expected_tools": [
+      "get_order",
+      "check_refund_eligibility"
+    ],
+    "expected_policy": "refund_policy",
+    "expected_resolution": "deny_outside_window",
+    "requires_human": false
+  },
+  {
+    "id": "SCN-DEMO-05",
+    "kind": "defective_warranty",
+    "customer_public_id": "CUST-00011",
+    "customer_email": "demo@test.com.br",
+    "order_public_id": "ORD-01017",
+    "user_message": "Meu notebook chegou com defeito. Quero reembolso.",
+    "expected_intent": "billing",
+    "expected_tools": [
+      "get_order",
+      "check_refund_eligibility"
+    ],
+    "expected_policy": "warranty_policy",
+    "expected_resolution": "warranty_exception",
+    "requires_human": true
+  },
+  {
+    "id": "SCN-DEMO-06",
+    "kind": "high_value_refund",
+    "customer_public_id": "CUST-00011",
+    "customer_email": "demo@test.com.br",
+    "order_public_id": "ORD-01018",
+    "user_message": "Quero reembolso do meu notebook de alto valor.",
+    "expected_intent": "billing",
+    "expected_tools": [
+      "get_order",
+      "check_refund_eligibility"
+    ],
+    "expected_policy": "refund_policy",
+    "expected_resolution": "escalate_high_value_refund",
+    "requires_human": true
+  },
+  {
+    "id": "SCN-DEMO-07",
+    "kind": "cancel_after_ship",
+    "customer_public_id": "CUST-00011",
+    "customer_email": "demo@test.com.br",
+    "order_public_id": "ORD-01019",
+    "user_message": "Quero cancelar meu pedido.",
+    "expected_intent": "logistics",
+    "expected_tools": [
+      "get_order",
+      "get_shipment"
+    ],
+    "expected_policy": "shipping_policy",
+    "expected_resolution": "deny_cancel_use_return",
+    "requires_human": false
+  },
+  {
+    "id": "SCN-DEMO-08",
+    "kind": "final_sale",
+    "customer_public_id": "CUST-00011",
+    "customer_email": "demo@test.com.br",
+    "order_public_id": "ORD-01020",
+    "user_message": "Quero devolver este item.",
+    "expected_intent": "logistics",
+    "expected_tools": [
+      "get_order",
+      "check_refund_eligibility"
+    ],
+    "expected_policy": "return_policy",
+    "expected_resolution": "deny_final_sale",
+    "requires_human": false
+  },
+  {
+    "id": "SCN-DEMO-09",
+    "kind": "failed_payment",
+    "customer_public_id": "CUST-00011",
+    "customer_email": "demo@test.com.br",
+    "order_public_id": "ORD-01021",
+    "user_message": "Tentei pagar e o cartao foi recusado. O que aconteceu com o pedido?",
+    "expected_intent": "billing",
+    "expected_tools": [
+      "get_order",
+      "get_payments"
+    ],
+    "expected_policy": "payment_policy",
+    "expected_resolution": "explain_failed_payment",
+    "requires_human": false
+  },
+  {
+    "id": "SCN-DEMO-10",
+    "kind": "happy_path",
+    "customer_public_id": "CUST-00011",
+    "customer_email": "demo@test.com.br",
+    "order_public_id": "ORD-01022",
+    "user_message": "Onde esta meu pedido?",
+    "expected_intent": "logistics",
+    "expected_tools": [
+      "get_order",
+      "get_shipment"
+    ],
+    "expected_policy": "shipping_policy",
+    "expected_resolution": "share_tracking",
+    "requires_human": false
   }
 ]

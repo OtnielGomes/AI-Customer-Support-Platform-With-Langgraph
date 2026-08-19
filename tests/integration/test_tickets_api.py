@@ -1,7 +1,7 @@
 """Integration tests for ticket listing, HITL, traces, and analytics."""
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import psycopg
@@ -25,8 +25,10 @@ class FakeGraph:
     def __init__(self) -> None:
         self.mode = "resolve"
         self.resume_payload: dict | None = None
+        self.stream_calls = 0
 
     async def astream(self, payload, config=None, stream_mode=None):
+        self.stream_calls += 1
         events = []
         if self.mode == "escalate":
             events = [
@@ -123,22 +125,32 @@ def client(fake_graph: FakeGraph) -> TestClient:
     mock_redis.ping = AsyncMock(return_value=True)
     mock_redis.get = AsyncMock(return_value=None)
     mock_redis.set = AsyncMock(return_value=True)
+    mock_pubsub = AsyncMock()
+    mock_pubsub.get_message = AsyncMock(return_value=None)
+    mock_pubsub.subscribe = AsyncMock()
+    mock_pubsub.unsubscribe = AsyncMock()
+    mock_pubsub.aclose = AsyncMock()
+    mock_redis.pubsub = MagicMock(return_value=mock_pubsub)
+    mock_redis.publish = AsyncMock(return_value=1)
 
     app.state.support_graph = fake_graph
     app.state.redis = mock_redis
-    return TestClient(app)
+    with TestClient(app) as test_client:
+        test_client.redis = mock_redis  # type: ignore[attr-defined]
+        yield test_client
 
 
 def _ensure_customer(email: str, name: str = "Test User") -> None:
     """Insert a customer row when the portal no longer auto-creates accounts."""
     dsn = get_settings().database_url.replace("postgresql+psycopg://", "postgresql://")
-    with psycopg.connect(dsn) as conn:
+    with psycopg.connect(dsn, connect_timeout=5) as conn:
         with conn.cursor() as cursor:
             cursor.execute("SELECT 1 FROM customers WHERE email = %s", (email,))
             if cursor.fetchone() is None:
                 cursor.execute(
                     """
-                    INSERT INTO customers (id, public_id, email, name, customer_tier, account_status)
+                    INSERT INTO customers
+                        (id, public_id, email, name, customer_tier, account_status)
                     VALUES (%s, %s, %s, %s, 'standard', 'active')
                     """,
                     (str(uuid4()), f"CUST-{uuid4().hex[:8].upper()}", email, name),
@@ -200,6 +212,8 @@ def test_resolve_persists_run_and_events(client: TestClient, fake_graph: FakeGra
     )
     assert confirmed.status_code == 200, confirmed.text
     assert confirmed.json()["status"] == "resolved"
+    history = client.get(f"/tickets/{ticket_id}/messages", headers=_auth_headers())
+    assert any(item["role"] == "system" for item in history.json()["items"])
 
     runs = client.get(f"/tickets/{ticket_id}/runs", headers=_auth_headers())
     assert runs.status_code == 200
@@ -247,16 +261,75 @@ def test_escalation_reply_cycle(client: TestClient, fake_graph: FakeGraph) -> No
 
 
 def test_close_ticket(client: TestClient) -> None:
-    """Close should mark the ticket closed."""
+    """Close should mark the ticket closed and persist a system notice."""
     created = _create_ticket(client, "close")
+    client.post(
+        f"/tickets/{created['id']}/takeover",
+        headers=_auth_headers(),
+        json={"agent": "console"},
+    )
     closed = client.post(
         f"/tickets/{created['id']}/close",
         headers=_auth_headers(),
         json={"reason": "Duplicate"},
     )
     assert closed.status_code == 200, closed.text
-    assert closed.json()["status"] == "closed"
-    assert "Closed by agent. Duplicate" in (closed.json()["resolution"] or "")
+    body = closed.json()
+    assert body["status"] == "closed"
+    assert body["assigned_agent"] is None
+    assert "Closed by agent. Duplicate" in (body["resolution"] or "")
+    history = client.get(f"/tickets/{created['id']}/messages", headers=_auth_headers())
+    assert history.status_code == 200
+    roles = [item["role"] for item in history.json()["items"]]
+    assert "system" in roles
+    published = [
+        call.args[1]
+        for call in client.redis.publish.await_args_list
+        if call.args
+    ]
+    assert any("ticket_status" in payload for payload in published)
+
+
+def test_confirm_ticket_persists_system_notice(client: TestClient) -> None:
+    """Customer confirm should resolve the ticket and publish status."""
+    created = _create_ticket(client, "confirm")
+    confirmed = client.post(
+        f"/tickets/{created['id']}/confirm",
+        headers=_auth_headers(),
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    assert confirmed.json()["status"] == "resolved"
+    history = client.get(f"/tickets/{created['id']}/messages", headers=_auth_headers())
+    assert history.status_code == 200
+    roles = [item["role"] for item in history.json()["items"]]
+    assert "system" in roles
+    published = [
+        call.args[1]
+        for call in client.redis.publish.await_args_list
+        if call.args
+    ]
+    assert any("ticket_status" in payload for payload in published)
+
+
+def test_ticket_events_emits_heartbeat(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """GET /tickets/{id}/events should stream an SSE heartbeat then close."""
+
+    async def _one_heartbeat(*_args, **_kwargs):
+        yield {"event": "heartbeat", "data": {"ts": "t"}}
+
+    monkeypatch.setattr(
+        "app.api.routes.tickets.subscribe_ticket_events",
+        _one_heartbeat,
+    )
+    created = _create_ticket(client, "events")
+    with client.stream(
+        "GET",
+        f"/tickets/{created['id']}/events",
+        headers=_auth_headers(),
+    ) as response:
+        assert response.status_code == 200, response.text
+        collected = "".join(response.iter_text())
+    assert "heartbeat" in collected
 
 
 def test_analytics_overview_and_tools(client: TestClient) -> None:
@@ -364,6 +437,34 @@ def test_post_message_sse_persists_history(client: TestClient, fake_graph: FakeG
     assert "assistant" in roles
 
 
+def test_customer_message_after_takeover_skips_graph(
+    client: TestClient, fake_graph: FakeGraph
+) -> None:
+    """After a human takes over, a customer reply must not invoke the AI."""
+    created = _create_ticket(client, "human-owned")
+    takeover = client.post(
+        f"/tickets/{created['id']}/takeover",
+        headers=_auth_headers(),
+        json={"agent": "console"},
+    )
+    assert takeover.status_code == 200, takeover.text
+    fake_graph.stream_calls = 0
+    with client.stream(
+        "POST",
+        f"/tickets/{created['id']}/messages",
+        headers=_auth_headers(),
+        json={"content": "Ainda estou aguardando.", "role": "customer"},
+    ) as response:
+        assert response.status_code == 200, response.text
+        payload = "".join(response.iter_text())
+    assert fake_graph.stream_calls == 0
+    assert "Invoice found" not in payload
+    history = client.get(f"/tickets/{created['id']}/messages", headers=_auth_headers())
+    roles = [item["role"] for item in history.json()["items"]]
+    assert "customer" in roles
+    assert "assistant" not in roles
+
+
 def test_takeover_assigns_agent(client: TestClient) -> None:
     """Console takeover stores assigned_agent on the ticket."""
     created = _create_ticket(client, "take")
@@ -374,3 +475,21 @@ def test_takeover_assigns_agent(client: TestClient) -> None:
     )
     assert response.status_code == 200, response.text
     assert response.json()["assigned_agent"] == "console"
+    published = [call.args[1] for call in client.redis.publish.await_args_list]
+    assert any("ticket_status" in payload for payload in published)
+
+
+def test_portal_me_returns_profile(client: TestClient) -> None:
+    """GET /portal/me requires a known customer email."""
+    email = "portal-me@example.com"
+    _ensure_customer(email, "Portal Me")
+    missing = client.get("/portal/me", headers=_auth_headers())
+    assert missing.status_code == 401
+    ok = client.get("/portal/me", headers={**_auth_headers(), "X-Customer-Email": email})
+    assert ok.status_code == 200, ok.text
+    body = ok.json()
+    assert body["email"] == email
+    assert body["name"] == "Portal Me"
+    assert "orders" in body
+    assert "conversations" in body
+

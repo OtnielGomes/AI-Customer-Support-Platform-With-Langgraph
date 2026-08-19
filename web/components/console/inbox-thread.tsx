@@ -13,7 +13,7 @@ import type {
   TicketResponse,
 } from "@/lib/api/types";
 import { formatDate } from "@/lib/format";
-import { takeoverAction } from "@/app/console/actions";
+import { closeConversationAction, takeoverAction } from "@/app/console/actions";
 
 export function InboxThread({
   ticket,
@@ -28,6 +28,7 @@ export function InboxThread({
 }) {
   const [busy, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const closed = ticket.status === "closed";
 
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
@@ -44,22 +45,55 @@ export function InboxThread({
           {ticket.assigned_agent ? (
             <p className="mt-2 text-xs text-amber-200">Assumido por {ticket.assigned_agent}</p>
           ) : null}
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => {
-              startTransition(async () => {
-                setError(null);
-                const result = await takeoverAction(ticket.id);
-                if (result?.error) {
-                  setError(result.error);
-                }
-              });
-            }}
-            className="mt-4 rounded-full bg-white px-4 py-2 text-xs font-medium text-[#12151a] disabled:opacity-60"
-          >
-            Assumir conversa
-          </button>
+          <div className="mt-4 grid gap-2">
+            <button
+              type="button"
+              disabled={busy || closed}
+              onClick={() => {
+                startTransition(async () => {
+                  setError(null);
+                  const result = await takeoverAction(ticket.id);
+                  if (result?.error) {
+                    setError(result.error);
+                  }
+                });
+              }}
+              className="rounded-full bg-white px-4 py-2 text-xs font-medium text-[#12151a] disabled:opacity-60"
+            >
+              Assumir conversa
+            </button>
+            {closed ? (
+              <p className="text-xs text-[#9aa3ad]">Esta conversa já foi encerrada.</p>
+            ) : (
+              <form
+                className="grid gap-2"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  const form = event.currentTarget;
+                  startTransition(async () => {
+                    setError(null);
+                    const result = await closeConversationAction(ticket.id, new FormData(form));
+                    if (result?.error) {
+                      setError(result.error);
+                    }
+                  });
+                }}
+              >
+                <input
+                  name="reason"
+                  placeholder="Motivo (opcional)"
+                  className="rounded-xl border border-white/15 bg-[#0f1216] px-3 py-2 text-xs text-[#f2efe9] placeholder:text-[#8b939c]"
+                />
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className="rounded-full border border-white/20 px-4 py-2 text-xs font-medium text-[#e8e4dc] disabled:opacity-60"
+                >
+                  Encerrar conversa
+                </button>
+              </form>
+            )}
+          </div>
           {error ? <p className="mt-2 text-xs text-rose-400">{error}</p> : null}
         </section>
         {run ? <TraceTimeline run={run} events={events} /> : null}

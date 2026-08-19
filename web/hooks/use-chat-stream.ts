@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { ChatMessage, ChatStreamEvent, ResolutionResponse } from "@/lib/api/types";
+import type {
+  ChatMessage,
+  ChatStreamEvent,
+  ResolutionResponse,
+  TicketStatus,
+} from "@/lib/api/types";
 
 const liveCache = new Map<string, ChatMessage[]>();
 
@@ -53,6 +58,19 @@ function parseStreamEvent(rawEvent: string, rawData: string): ChatStreamEvent | 
         ? String((data as { error: unknown }).error)
         : rawData;
     return { event: "error", data: { error } };
+  }
+  if (rawEvent === "ticket_status") {
+    const payload = data as { status?: string; assigned_agent?: string | null };
+    if (typeof payload.status !== "string") {
+      return null;
+    }
+    return {
+      event: "ticket_status",
+      data: {
+        status: payload.status as TicketStatus,
+        assigned_agent: payload.assigned_agent ?? null,
+      },
+    };
   }
   if (rawEvent === "status" || rawEvent === "tool" || rawEvent === "heartbeat") {
     return { event: rawEvent, data } as ChatStreamEvent;
@@ -158,9 +176,14 @@ function assistantFromDone(data: ResolutionResponse, fallback: string): ChatMess
   };
 }
 
-export function useChatStream(ticketId: string | null, initial: ChatMessage[]) {
+export function useChatStream(
+  ticketId: string | null,
+  initial: ChatMessage[],
+  initialStatus: TicketStatus = "open",
+) {
   const [messages, setMessages] = useState<ChatMessage[]>(() => readCache(ticketId, initial));
   const [activeId, setActiveId] = useState(ticketId);
+  const [status, setStatus] = useState<TicketStatus>(initialStatus);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -170,6 +193,7 @@ export function useChatStream(ticketId: string | null, initial: ChatMessage[]) {
   if (ticketId !== activeId) {
     setActiveId(ticketId);
     setMessages(readCache(ticketId, initial));
+    setStatus(initialStatus);
     setDraft("");
     draftRef.current = "";
   }
@@ -232,6 +256,12 @@ export function useChatStream(ticketId: string | null, initial: ChatMessage[]) {
     };
     source.addEventListener("message", apply("message"));
     source.addEventListener("done", apply("done"));
+    source.addEventListener("ticket_status", (event: MessageEvent<string>) => {
+      const parsed = parseStreamEvent("ticket_status", event.data);
+      if (parsed?.event === "ticket_status") {
+        setStatus(parsed.data.status);
+      }
+    });
     return () => {
       source.close();
     };
@@ -297,6 +327,9 @@ export function useChatStream(ticketId: string | null, initial: ChatMessage[]) {
             draftRef.current = "";
             setDraft("");
           }
+          if (event.event === "ticket_status") {
+            setStatus(event.data.status);
+          }
           if (event.event === "error") {
             setError(event.data.error);
           }
@@ -323,5 +356,5 @@ export function useChatStream(ticketId: string | null, initial: ChatMessage[]) {
     [ticketId, upsert],
   );
 
-  return { messages, draft, busy, error, send, setError };
+  return { messages, draft, busy, error, status, setStatus, send, setError };
 }
