@@ -24,8 +24,10 @@ COPY --from=builder /app /app
 COPY alembic.ini ./
 COPY migrations ./migrations
 COPY data ./data
+COPY scripts ./scripts
 COPY docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY docker/bootstrap-data.sh /bootstrap-data.sh
+RUN chmod +x /entrypoint.sh /bootstrap-data.sh
 
 EXPOSE 8000
 ENTRYPOINT ["/entrypoint.sh"]
