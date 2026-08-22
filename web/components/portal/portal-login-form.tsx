@@ -24,7 +24,7 @@ export function PortalLoginForm() {
           name="email"
           required
           autoComplete="email"
-          placeholder="ana.costa@nexamail.com"
+          placeholder="exemplo@email.com"
           className="rounded-lg border border-[var(--line)] bg-white px-3 py-2"
         />
       </label>
