@@ -38,12 +38,20 @@ Invoke-Step "Verifying Python environment" {
 }
 
 Invoke-Step "Starting Docker services (db, redis)" {
-    docker compose up -d db redis
+    docker compose up -d --wait db redis
 }
 
 Write-Host ""
-Write-Host "Waiting for database..."
-Start-Sleep -Seconds 8
+Write-Host "Verifying Postgres host port..."
+$published = docker compose port db 5432 2>$null
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($published)) {
+    throw @"
+Postgres is running but not published on the host.
+Another container is likely already bound to POSTGRES_HOST_PORT (default 5433).
+Set POSTGRES_HOST_PORT and the port in DATABASE_URL in .env to a free port (for example 5434), then re-run bootstrap.
+"@
+}
+Write-Host "Postgres published at $published"
 
 Invoke-Step "Running migrations" {
     uv run alembic upgrade head

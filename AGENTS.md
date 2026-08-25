@@ -160,7 +160,8 @@ Copy from `.env.example` when present. Never commit secrets.
 
 | Variable | Purpose |
 |----------|---------|
-| `DATABASE_URL` | PostgreSQL (app + pgvector). **Local host:** `localhost:5433` (Docker maps `5433:5432` to avoid conflict with a local Postgres on 5432) |
+| `DATABASE_URL` | PostgreSQL (app + pgvector). **Local host:** `localhost:${POSTGRES_HOST_PORT:-5433}` (Docker maps that port to `db:5432` to avoid conflict with a local Postgres on 5432) |
+| `POSTGRES_HOST_PORT` | Host port published by Compose for Postgres (default `5433`). Must match the port in `DATABASE_URL` |
 | `REDIS_URL` | Cache + chat pub/sub |
 | `OPENAI_API_KEY` (or provider equivalent) | LLM + embeddings |
 | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST` | Langfuse |
@@ -221,7 +222,7 @@ uv run fastapi dev
 
 ### Local dev invariants
 
-* **Postgres host port:** `5433` in `.env` / `.env.example`; Docker internal `db:5432` for the `api` service only.
+* **Postgres host port:** `POSTGRES_HOST_PORT` (default `5433`) in `.env` / `.env.example`, kept in sync with `DATABASE_URL`; Docker internal `db:5432` for the `api` service only.
 * **LangGraph checkpointer:** `AsyncConnectionPool` in `app/graph/workflow.py` must use `kwargs={"autocommit": True}` (migrations use `CREATE INDEX CONCURRENTLY`).
 * **StrEnum + PostgreSQL:** SQLAlchemy `Enum` columns need `values_callable=lambda x: [e.value for e in x]` so DB receives `open` not `OPEN`.
 * **Async scripts on Windows:** `scripts/seed_demo.py` and `scripts/ingest_kb.py` use `SelectorEventLoop` when `sys.platform == "win32"`. The API sets `WindowsSelectorEventLoopPolicy` in `app/main.py` so Uvicorn/psycopg async works.
