@@ -1,4 +1,4 @@
-"""Unit tests for the NexaCommerce synthetic graph (no database)."""
+"""Unit tests for the TechStore synthetic graph (no database)."""
 
 from datetime import datetime
 from decimal import Decimal
@@ -137,3 +137,36 @@ def test_simulation_now_parses() -> None:
     now = simulation_now(load_company_yaml())
     assert isinstance(now, datetime)
     assert now.tzinfo is not None
+
+
+def test_generated_payments_use_pix_or_credit_card() -> None:
+    """v1.0 Facts never record boleto or debit as a Payment Method."""
+    world = generate_world(profile="demo", seed=42)
+    allowed = {"pix", "credit_card"}
+    assert world.payments
+    for payment in world.payments:
+        assert payment.payment_method in allowed
+    by_order: dict = {}
+    for payment in world.payments:
+        if payment.status == "paid":
+            by_order.setdefault(payment.order_id, 0)
+            by_order[payment.order_id] += 1
+    double_pay_orders = {
+        item.order_id for item in world.scenarios if item.kind == "double_payment"
+    }
+    assert double_pay_orders
+    for order_id, count in by_order.items():
+        if order_id in double_pay_orders:
+            assert count == 2
+        else:
+            assert count == 1
+
+
+def test_generated_product_names_are_generic() -> None:
+    """Catalog names must not use the retired NexaPhone-style brands."""
+    world = generate_world(profile="demo", seed=42)
+    assert world.products
+    for product in world.products:
+        assert "NexaPhone" not in product.name
+        assert "NexaCommerce" not in product.name
+        assert not product.name.startswith("Nexa")

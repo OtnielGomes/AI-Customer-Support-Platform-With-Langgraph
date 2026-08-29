@@ -1,4 +1,4 @@
-"""Seed demo customer and operational NexaCommerce data."""
+"""Seed demo customer and operational TechStore data."""
 
 from __future__ import annotations
 

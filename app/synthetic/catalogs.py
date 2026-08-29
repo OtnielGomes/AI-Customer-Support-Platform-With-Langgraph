@@ -1,4 +1,4 @@
-"""Curated NexaCommerce product catalog and Brazilian name lists."""
+"""Curated TechStore product catalog and Brazilian name lists."""
 
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ LAST_NAMES = [
 PRODUCT_SPECS: list[dict[str, Any]] = [
     {
         "sku": "NX-PHN-01",
-        "name": "NexaPhone 12",
+        "name": "Smartphone 6.1",
         "category": "smartphones",
         "unit_price": "1899.90",
         "final_sale": False,
@@ -59,7 +59,7 @@ PRODUCT_SPECS: list[dict[str, Any]] = [
     },
     {
         "sku": "NX-PHN-02",
-        "name": "NexaPhone Mini",
+        "name": "Compact smartphone",
         "category": "smartphones",
         "unit_price": "1299.00",
         "final_sale": False,
@@ -67,7 +67,7 @@ PRODUCT_SPECS: list[dict[str, Any]] = [
     },
     {
         "sku": "NX-PHN-03",
-        "name": "NexaPhone Outlet",
+        "name": "Outlet smartphone",
         "category": "smartphones",
         "unit_price": "799.90",
         "final_sale": True,
@@ -75,7 +75,7 @@ PRODUCT_SPECS: list[dict[str, Any]] = [
     },
     {
         "sku": "NX-LTP-01",
-        "name": "NexaBook Pro 14",
+        "name": "Notebook 14",
         "category": "laptops",
         "unit_price": "5499.00",
         "final_sale": False,
@@ -83,7 +83,7 @@ PRODUCT_SPECS: list[dict[str, Any]] = [
     },
     {
         "sku": "NX-LTP-02",
-        "name": "NexaBook Air 13",
+        "name": "Ultraportable notebook 13",
         "category": "laptops",
         "unit_price": "3499.00",
         "final_sale": False,
@@ -91,7 +91,7 @@ PRODUCT_SPECS: list[dict[str, Any]] = [
     },
     {
         "sku": "NX-LTP-03",
-        "name": "NexaBook Clearance 15",
+        "name": "Clearance notebook 15",
         "category": "laptops",
         "unit_price": "2199.00",
         "final_sale": True,
@@ -99,7 +99,7 @@ PRODUCT_SPECS: list[dict[str, Any]] = [
     },
     {
         "sku": "NX-MON-01",
-        "name": "NexaView 27 4K",
+        "name": "Monitor 27 4K",
         "category": "monitors",
         "unit_price": "1899.00",
         "final_sale": False,
@@ -107,7 +107,7 @@ PRODUCT_SPECS: list[dict[str, Any]] = [
     },
     {
         "sku": "NX-MON-02",
-        "name": "NexaView 24 FHD",
+        "name": "Monitor 24 FHD",
         "category": "monitors",
         "unit_price": "899.90",
         "final_sale": False,
@@ -115,7 +115,7 @@ PRODUCT_SPECS: list[dict[str, Any]] = [
     },
     {
         "sku": "NX-MON-03",
-        "name": "NexaView Outlet 22",
+        "name": "Outlet monitor 22",
         "category": "monitors",
         "unit_price": "449.90",
         "final_sale": True,
@@ -123,7 +123,7 @@ PRODUCT_SPECS: list[dict[str, Any]] = [
     },
     {
         "sku": "NX-HP-01",
-        "name": "NexaSound ANC",
+        "name": "ANC headphones",
         "category": "headphones",
         "unit_price": "699.90",
         "final_sale": False,
@@ -131,7 +131,7 @@ PRODUCT_SPECS: list[dict[str, Any]] = [
     },
     {
         "sku": "NX-HP-02",
-        "name": "NexaBuds",
+        "name": "Wireless earbuds",
         "category": "headphones",
         "unit_price": "249.90",
         "final_sale": False,
@@ -139,7 +139,7 @@ PRODUCT_SPECS: list[dict[str, Any]] = [
     },
     {
         "sku": "NX-HP-03",
-        "name": "NexaBuds Lite",
+        "name": "Lite earbuds",
         "category": "headphones",
         "unit_price": "99.90",
         "final_sale": True,
@@ -147,7 +147,7 @@ PRODUCT_SPECS: list[dict[str, Any]] = [
     },
     {
         "sku": "NX-KB-01",
-        "name": "NexaKey Mechanical",
+        "name": "Mechanical keyboard",
         "category": "keyboards",
         "unit_price": "499.90",
         "final_sale": False,
@@ -155,7 +155,7 @@ PRODUCT_SPECS: list[dict[str, Any]] = [
     },
     {
         "sku": "NX-KB-02",
-        "name": "NexaKey Wireless",
+        "name": "Wireless keyboard",
         "category": "keyboards",
         "unit_price": "299.90",
         "final_sale": False,
@@ -163,7 +163,7 @@ PRODUCT_SPECS: list[dict[str, Any]] = [
     },
     {
         "sku": "NX-KB-03",
-        "name": "NexaKey Compact",
+        "name": "Compact keyboard",
         "category": "keyboards",
         "unit_price": "149.90",
         "final_sale": True,
@@ -171,7 +171,7 @@ PRODUCT_SPECS: list[dict[str, Any]] = [
     },
     {
         "sku": "NX-ACC-01",
-        "name": "NexaCharge 65W",
+        "name": "USB-C charger 65W",
         "category": "accessories",
         "unit_price": "189.90",
         "final_sale": False,
@@ -187,7 +187,7 @@ PRODUCT_SPECS: list[dict[str, Any]] = [
     },
     {
         "sku": "NX-ACC-03",
-        "name": "NexaCase Phone",
+        "name": "Phone case",
         "category": "accessories",
         "unit_price": "79.90",
         "final_sale": True,
@@ -195,7 +195,7 @@ PRODUCT_SPECS: list[dict[str, Any]] = [
     },
     {
         "sku": "NX-ACC-04",
-        "name": "NexaMouse Silent",
+        "name": "Silent mouse",
         "category": "accessories",
         "unit_price": "129.90",
         "final_sale": False,
@@ -203,7 +203,7 @@ PRODUCT_SPECS: list[dict[str, Any]] = [
     },
     {
         "sku": "NX-PHN-04",
-        "name": "NexaPhone 12 Pro",
+        "name": "Smartphone 6.7",
         "category": "smartphones",
         "unit_price": "4299.00",
         "final_sale": False,
@@ -211,7 +211,7 @@ PRODUCT_SPECS: list[dict[str, Any]] = [
     },
     {
         "sku": "NX-LTP-04",
-        "name": "NexaBook Workstation",
+        "name": "Workstation notebook",
         "category": "laptops",
         "unit_price": "7999.00",
         "final_sale": False,
@@ -219,7 +219,7 @@ PRODUCT_SPECS: list[dict[str, Any]] = [
     },
     {
         "sku": "NX-MON-04",
-        "name": "NexaView Ultrawide 34",
+        "name": "Ultrawide monitor 34",
         "category": "monitors",
         "unit_price": "2599.00",
         "final_sale": False,
@@ -227,7 +227,7 @@ PRODUCT_SPECS: list[dict[str, Any]] = [
     },
     {
         "sku": "NX-HP-04",
-        "name": "NexaSound Studio",
+        "name": "Studio headphones",
         "category": "headphones",
         "unit_price": "1199.00",
         "final_sale": False,
@@ -235,7 +235,7 @@ PRODUCT_SPECS: list[dict[str, Any]] = [
     },
     {
         "sku": "NX-ACC-05",
-        "name": "NexaStand Laptop",
+        "name": "Laptop stand",
         "category": "accessories",
         "unit_price": "159.90",
         "final_sale": False,

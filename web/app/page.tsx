@@ -17,7 +17,7 @@ export default async function HomePage() {
     <main className="mx-auto min-h-screen max-w-3xl px-6 py-12">
       <header className="mb-10 flex items-start justify-between gap-6">
         <div>
-          <p className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">NexaCommerce</p>
+          <p className="text-sm uppercase tracking-[0.2em] text-[var(--muted)]">TechStore Support</p>
           <h1 className="mt-2 font-[family-name:var(--font-serif)] text-4xl">
             Olá, {me.name.split(" ")[0]}
           </h1>

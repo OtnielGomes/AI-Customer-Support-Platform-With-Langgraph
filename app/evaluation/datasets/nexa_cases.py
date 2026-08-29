@@ -1,4 +1,4 @@
-"""Evaluation cases grounded in synthetic NexaCommerce fixtures."""
+"""Evaluation cases grounded in synthetic TechStore fixtures."""
 
 from __future__ import annotations
 

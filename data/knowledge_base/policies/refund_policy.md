@@ -1,4 +1,4 @@
-# NexaCommerce Refund Policy
+# TechStore Refund Policy
 
 Canonical numbers match `data/company/company.yaml`.
 
@@ -11,3 +11,4 @@ Canonical numbers match `data/company/company.yaml`.
 7. Refunds are returned through the original payment method.
 8. Verified duplicate charges are eligible for a refund of one duplicate amount without using the 30-day window.
 9. Gold and enterprise tiers do not receive an automatic extra refund window unless a future yaml perk is added.
+10. Withdrawal (CDC cooling-off) is 7 calendar days after receipt, distinct from the 30-day commercial preference window.

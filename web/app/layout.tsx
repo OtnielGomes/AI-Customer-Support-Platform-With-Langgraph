@@ -16,8 +16,8 @@ const serif = Source_Serif_4({
 });
 
 export const metadata: Metadata = {
-  title: "NexaCommerce Support",
-  description: "Customer portal and support console for the NexaCommerce AI support platform.",
+  title: "TechStore Support",
+  description: "Customer Portal and Support Console for TechStore Support.",
 };
 
 export default function RootLayout({

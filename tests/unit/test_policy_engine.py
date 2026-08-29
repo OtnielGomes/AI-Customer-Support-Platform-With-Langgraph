@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.policies.engine import can_cancel, can_refund
+from app.policies.engine import can_cancel, can_refund, should_escalate
 from app.policies.loader import load_company_config
 
 
@@ -141,4 +141,75 @@ def test_cancel_after_ship_denied(company: dict) -> None:
         company=company,
     )
     assert decision.eligible is False
+    assert decision.requires_human is False
     assert "SHIPPED_USE_RETURN" in decision.reasons
+
+
+def test_cancel_before_ship_eligible(company: dict) -> None:
+    """Unshipped orders may be cancelled without Escalation."""
+    decision = can_cancel(
+        shipment_status=None,
+        order_status="processing",
+        company=company,
+    )
+    assert decision.eligible is True
+    assert decision.requires_human is False
+
+
+def test_withdrawal_within_legal_window(company: dict) -> None:
+    """CDC Withdrawal is eligible within 7 days of receipt."""
+    decision = can_refund(
+        days_since_delivery=5,
+        amount=Decimal("200.00"),
+        product_category="accessories",
+        final_sale=False,
+        reason="withdrawal",
+        identity_verified=True,
+        warranty_days=90,
+        company=company,
+    )
+    assert decision.eligible is True
+    assert decision.requires_human is False
+    assert "WITHDRAWAL" in decision.reasons
+
+
+def test_withdrawal_outside_legal_window_is_coded_refusal(company: dict) -> None:
+    """Day 10 Withdrawal is refused in-thread, not Escalation."""
+    decision = can_refund(
+        days_since_delivery=10,
+        amount=Decimal("200.00"),
+        product_category="accessories",
+        final_sale=False,
+        reason="withdrawal",
+        identity_verified=True,
+        warranty_days=90,
+        company=company,
+    )
+    assert decision.eligible is False
+    assert decision.requires_human is False
+    assert "OUTSIDE_WITHDRAWAL_WINDOW" in decision.reasons
+
+
+@pytest.mark.parametrize(
+    ("trigger", "insist", "escalate"),
+    [
+        ("delivered_but_missing", False, True),
+        ("fraud", False, True),
+        ("privacy_beyond_own_profile", False, True),
+        ("product_technical_assistance", False, True),
+        ("unusable_identity", False, True),
+        ("policy_exception_demanded", False, True),
+        ("lawful_refusal", False, False),
+        ("lawful_refusal", True, True),
+        ("order_tracking", False, False),
+        ("payment_status", False, False),
+    ],
+)
+def test_closed_escalation_catalog(
+    trigger: str, insist: bool, escalate: bool
+) -> None:
+    """Escalation fires only for the closed catalog, not for tracking or first refusal."""
+    decision = should_escalate(
+        trigger=trigger, customer_insists_after_refusal=insist
+    )
+    assert decision.escalate is escalate

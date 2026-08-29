@@ -25,3 +25,11 @@ class CancelDecision(BaseModel):
     requires_human: bool = False
     reasons: list[str] = Field(default_factory=list)
     policy_ids: list[str] = Field(default_factory=list)
+
+
+class EscalationDecision(BaseModel):
+    """Deterministic Escalation catalog outcome."""
+
+    escalate: bool
+    reasons: list[str] = Field(default_factory=list)
+    policy_ids: list[str] = Field(default_factory=list)

@@ -1,4 +1,4 @@
-# NexaCommerce Account Policy
+# TechStore Account Policy
 
 1. Tiers: standard, silver, gold, enterprise. No undocumented perks.
 2. Account statuses: active, suspended, closed.

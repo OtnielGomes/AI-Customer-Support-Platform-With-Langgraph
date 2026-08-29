@@ -11,6 +11,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from langchain_core.tools import BaseTool
 
 from app.config import build_chat_model
+from app.policies.engine import escalation_from_facts
 from app.security.authentication import Principal
 from app.security.authorization import AuthorizationError, authorize_tool
 from app.tools.context import get_tool_context
@@ -34,6 +35,35 @@ def bind_ticket_customer(customer_id: str | None) -> None:
 
 def _tool_map(tools: list[BaseTool]) -> dict[str, BaseTool]:
     return {tool.name: tool for tool in tools}
+
+
+def _facts_from_tool_results(tool_results: list[dict[str, Any]]) -> dict[str, Any]:
+    """Flatten tool payloads into Facts the Escalation catalog can read."""
+    facts: dict[str, Any] = {}
+    for item in tool_results:
+        result = item.get("result")
+        if not isinstance(result, dict) or result.get("error"):
+            continue
+        name = item.get("tool")
+        if name == "verify_identity":
+            facts["identity_checked"] = True
+            facts["identity_verified"] = result.get("verified")
+            if result.get("account_status"):
+                facts["account_status"] = result.get("account_status")
+        if name in {"get_shipment", "get_shipping_status"}:
+            if result.get("status"):
+                facts["shipment_status"] = result.get("status")
+            if "customer_received" in result:
+                facts["customer_received"] = result.get("customer_received")
+        if name == "evaluate_escalation":
+            if result.get("escalation_trigger"):
+                facts["escalation_trigger"] = result.get("escalation_trigger")
+            facts["customer_insists_after_refusal"] = bool(
+                result.get("customer_insists_after_refusal")
+            )
+        if result.get("account_status") and "account_status" not in facts:
+            facts["account_status"] = result.get("account_status")
+    return facts
 
 
 async def run_tool_loop(
@@ -109,16 +139,20 @@ async def run_tool_loop(
             tool_results.append({"tool": name, "result": result})
             if name == "check_refund_eligibility" and isinstance(result, dict):
                 policy_decision = result
+            if name == "evaluate_escalation" and isinstance(result, dict):
+                policy_decision = result
             if name == "create_refund_request" and isinstance(result, dict):
-                policy_decision = result.get("eligibility") or policy_decision
+                eligibility = result.get("eligibility")
+                if isinstance(eligibility, dict):
+                    policy_decision = eligibility
                 if result.get("status") in {"requested", "pending_approval"}:
                     refund_tool_success = True
                 if result.get("refund_executed"):
                     refund_executed = True
                 if result.get("requires_human"):
-                    policy_decision = policy_decision or {}
-                    if isinstance(policy_decision, dict):
-                        policy_decision["requires_human"] = True
+                    merged: dict[str, Any] = dict(policy_decision or {})
+                    merged["requires_human"] = True
+                    policy_decision = merged
             messages.append(
                 ToolMessage(
                     content=json.dumps(result, default=str),
@@ -137,6 +171,14 @@ async def run_tool_loop(
     needs_human = False
     if isinstance(policy_decision, dict) and policy_decision.get("requires_human"):
         needs_human = True
+    catalog = escalation_from_facts(_facts_from_tool_results(tool_results))
+    if catalog.escalate:
+        needs_human = True
+        merged_decision: dict[str, Any] = dict(policy_decision or {})
+        merged_decision["requires_human"] = True
+        if catalog.reasons:
+            merged_decision["escalation_trigger"] = catalog.reasons[0].lower()
+        policy_decision = merged_decision
     lowered = answer.lower()
     if "escalat" in lowered:
         needs_human = True

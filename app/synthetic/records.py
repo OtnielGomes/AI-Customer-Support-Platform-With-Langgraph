@@ -160,7 +160,7 @@ class ScenarioRecord:
 
 @dataclass
 class World:
-    """Complete in-memory NexaCommerce snapshot."""
+    """Complete in-memory TechStore snapshot."""
 
     products: list[ProductRecord] = field(default_factory=list)
     customers: list[CustomerRecord] = field(default_factory=list)

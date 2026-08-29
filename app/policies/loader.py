@@ -10,7 +10,7 @@ COMPANY_YAML = Path("data/company/company.yaml")
 
 
 def load_company_config(path: Path | None = None) -> dict[str, Any]:
-    """Load the NexaCommerce world model.
+    """Load the TechStore world model.
 
     Prefers PyYAML when ``safe_load`` is available; otherwise parses the
     restricted YAML subset used by this repository.

@@ -1,4 +1,4 @@
-# NexaCommerce Warranty Policy
+# TechStore Warranty Policy
 
 This policy can override the standard 30-day refund window for defects.
 

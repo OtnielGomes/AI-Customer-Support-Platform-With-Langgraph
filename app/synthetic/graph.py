@@ -55,7 +55,7 @@ STATUS_WEIGHTS = [
     ("cancelled", 7),
     ("returned", 5),
 ]
-PAYMENT_METHODS = ["credit_card", "debit_card", "pix", "boleto"]
+DEFAULT_PAYMENT_METHODS = ["pix", "credit_card"]
 EMAIL_DOMAINS = ("gmail.com", "outlook.com", "uol.com.br", "nexamail.com")
 DEMO_LOGIN_EMAIL = "ana.costa@nexamail.com"
 DEMO_LOGIN_NAME = "Ana Costa"
@@ -64,8 +64,16 @@ DEMO_SHOWCASE_NAME = "Demo Tester"
 
 
 def load_company_yaml(path: Path | None = None) -> dict[str, Any]:
-    """Load the NexaCommerce world model."""
+    """Load the TechStore world model."""
     return load_company_config(path)
+
+
+def allowed_payment_methods(company: dict[str, Any]) -> list[str]:
+    """Return v1.0 Payment Methods from the world model."""
+    methods = company.get("payment", {}).get("methods")
+    if isinstance(methods, list) and methods:
+        return [str(item) for item in methods]
+    return list(DEFAULT_PAYMENT_METHODS)
 
 
 def simulation_now(company: dict[str, Any]) -> datetime:
@@ -172,7 +180,10 @@ def add_order_bundle(
     pay_index = len(world.payments) + 1
     ship_index = len(world.shipments) + 1
     carriers = company["shipping"]["carriers"]
-    method = payment_method or rng.choice(PAYMENT_METHODS)
+    allowed_methods = allowed_payment_methods(company)
+    method = payment_method or rng.choice(allowed_methods)
+    if method not in allowed_methods:
+        method = allowed_methods[0]
     line_total = (product.unit_price * quantity).quantize(Decimal("0.01"))
     estimated = created_at + timedelta(days=estimated_offset_days or rng.randint(3, 12))
     delivered_at: datetime | None = None
@@ -258,7 +269,11 @@ def add_order_bundle(
                 order_id=order.id,
                 status="paid",
                 amount=line_total,
-                payment_method=second_payment_method or method,
+                payment_method=(
+                    second_payment_method
+                    if second_payment_method in allowed_methods
+                    else method
+                ),
                 transaction_id=f"TXN-{rng.uuid4().hex[:12].upper()}",
                 created_at=created_at + timedelta(minutes=8),
             )

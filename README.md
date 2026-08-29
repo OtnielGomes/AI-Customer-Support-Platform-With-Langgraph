@@ -1,4 +1,4 @@
-# AI Customer Support Platform
+# TechStore Support
 
 [![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
@@ -7,7 +7,7 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-pgvector-4169E1?style=flat-square&logo=postgresql&logoColor=white)](https://github.com/pgvector/pgvector)
 [![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat-square&logo=redis&logoColor=white)](https://redis.io/)
 
-Production-oriented customer support for **NexaCommerce**: a **supervisor** routes tickets to domain workers that look up **operational facts in PostgreSQL**, retrieve **policies via RAG**, and enforce **deterministic rules** before any refund or cancellation. The LLM does not invent order state.
+Production-oriented customer support for **TechStore**: a **supervisor** routes tickets to domain workers that look up **operational facts in PostgreSQL**, retrieve **policies via RAG**, and enforce **deterministic rules** before any refund or cancellation. The LLM does not invent order state. The product is **TechStore Support**.
 
 [Overview](#overview) · [Features](#features) · [Architecture](#architecture) · [Screenshots](#screenshots) · [Getting started](#getting-started) · [Demo scenarios](#demo-scenarios) · [API](#api) · [Project structure](#project-structure) · [Testing](#testing) · [Deployment](#deployment)
 
@@ -32,7 +32,7 @@ The stack includes a **Customer Portal** (email login + live chat) and a **Suppo
 - **Scoped tools** — `get_order`, `get_payments`, `get_shipment`, `check_refund_eligibility`, and more, bound to the authenticated customer.
 - **Human-in-the-loop** — escalation with console inbox takeover; human replies persist as `human_agent`.
 - **Live chat** — SSE token streaming, Redis pub/sub fan-out, `ticket_messages` persistence.
-- **Synthetic NexaCommerce world** — reproducible demo data with labeled anomalies (`SCN-*`) for evals.
+- **Synthetic TechStore world** — reproducible demo data with labeled anomalies (`SCN-*`) for evals.
 - **Observability** — OpenTelemetry traces and Langfuse for LLM/tool runs.
 - **Evaluation harness** — pytest suites plus dataset metrics in `app/evaluation/`.
 

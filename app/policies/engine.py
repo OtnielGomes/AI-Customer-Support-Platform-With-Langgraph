@@ -8,7 +8,9 @@ from typing import Any
 from app.policies.loader import load_cached_company_config
 from app.policies.rules import can_cancel as cancel_rule
 from app.policies.rules import can_refund as refund_rule
-from app.policies.types import CancelDecision, RefundDecision
+from app.policies.rules import escalation_from_facts as escalation_from_facts_rule
+from app.policies.rules import should_escalate as escalate_rule
+from app.policies.types import CancelDecision, EscalationDecision, RefundDecision
 
 
 def can_refund(
@@ -51,6 +53,23 @@ def can_cancel(
         order_status=order_status,
         company=company or load_cached_company_config(),
     )
+
+
+def should_escalate(
+    *,
+    trigger: str,
+    customer_insists_after_refusal: bool = False,
+) -> EscalationDecision:
+    """Evaluate the closed Escalation catalog."""
+    return escalate_rule(
+        trigger=trigger,
+        customer_insists_after_refusal=customer_insists_after_refusal,
+    )
+
+
+def escalation_from_facts(facts: dict[str, Any]) -> EscalationDecision:
+    """Map structured Facts onto the closed Escalation catalog."""
+    return escalation_from_facts_rule(facts)
 
 
 def evaluate_refund_from_facts(facts: dict[str, Any]) -> RefundDecision:

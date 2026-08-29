@@ -4,13 +4,33 @@ from typing import Literal
 
 from app.agents.supervisor import should_route_to_worker
 from app.graph.state import SupportState
+from app.policies.engine import should_escalate
+
+
+def _catalog_requires_escalation(state: SupportState) -> bool:
+    """Return True when Policy or the closed catalog requires a Human Agent."""
+    if state.get("needs_human"):
+        return True
+    decision = state.get("policy_decision") or {}
+    if not isinstance(decision, dict):
+        return False
+    if decision.get("requires_human"):
+        return True
+    trigger = decision.get("escalation_trigger")
+    if not trigger:
+        return False
+    gate = should_escalate(
+        trigger=str(trigger),
+        customer_insists_after_refusal=bool(decision.get("customer_insists_after_refusal")),
+    )
+    return gate.escalate
 
 
 def route_after_supervisor(state: SupportState) -> Literal[
     "billing", "logistics", "account", "escalation"
 ]:
     """Route to domain worker or escalation based on intent."""
-    if state.get("needs_human"):
+    if _catalog_requires_escalation(state):
         return "escalation"
 
     intent = state.get("intent", "unknown")
@@ -30,10 +50,7 @@ def route_after_supervisor(state: SupportState) -> Literal[
 
 def route_after_worker(state: SupportState) -> Literal["resolution", "escalation"]:
     """Route to resolution or escalation after domain worker."""
-    if state.get("needs_human"):
-        return "escalation"
-    decision = state.get("policy_decision") or {}
-    if isinstance(decision, dict) and decision.get("requires_human"):
+    if _catalog_requires_escalation(state):
         return "escalation"
     return "resolution"
 

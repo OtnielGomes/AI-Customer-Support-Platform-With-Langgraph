@@ -376,7 +376,7 @@ def _fraud_risk(world, rng, now, company, copy_index, window, threshold) -> None
         cheap,
         status="delivered",
         created_at=now - timedelta(days=40),
-        payment_method="boleto",
+        payment_method="pix",
         delivered_offset_days=6,
     )
     add_order_bundle(

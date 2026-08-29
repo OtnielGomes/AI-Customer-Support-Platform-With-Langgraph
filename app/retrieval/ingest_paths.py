@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 def infer_domain(path: Path) -> str:
-    """Infer retrieval domain from the NexaCommerce KB tree."""
+    """Infer retrieval domain from the TechStore KB tree."""
     posix = path.as_posix().lower()
     if "/policies/refund" in posix or "/policies/payment" in posix or "/faq/payments" in posix:
         return "billing"

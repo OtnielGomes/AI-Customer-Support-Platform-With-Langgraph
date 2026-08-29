@@ -19,7 +19,7 @@ export default function ConsoleLayout({
       <div className="grid min-h-screen lg:grid-cols-[240px_1fr]">
         <aside className="border-b border-white/10 px-5 py-6 lg:border-r lg:border-b-0">
           <p className="text-xs uppercase tracking-[0.25em] text-[#9aa3ad]">
-            NexaCommerce
+            TechStore Support
           </p>
           <h1 className="mt-2 font-[family-name:var(--font-serif)] text-2xl">
             Console

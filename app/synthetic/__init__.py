@@ -1,4 +1,4 @@
-"""NexaCommerce synthetic data package."""
+"""TechStore synthetic data package."""
 
 from __future__ import annotations
 

@@ -14,6 +14,7 @@ from app.agents.supervisor import classify_intent
 from app.graph.state import SupportState
 from app.models.customer import Customer
 from app.observability.metrics import record_node_latency
+from app.policies.engine import escalation_from_facts
 from app.security.guardrails import GuardrailViolation, sanitize_input, validate_output
 from app.tools.context import get_tool_context
 from app.tools.lookups import list_customer_orders, order_to_dict
@@ -86,7 +87,7 @@ async def load_customer_context_node(state: SupportState) -> dict[str, Any]:
                 "order_status": orders[0].status.value,
                 "order_total": str(orders[0].total_amount),
             }
-        return {
+        payload: dict[str, Any] = {
             "customer_public_id": customer.public_id,
             "customer_name": customer.name,
             "customer_tier": customer.customer_tier.value,
@@ -94,6 +95,16 @@ async def load_customer_context_node(state: SupportState) -> dict[str, Any]:
             "orders_summary": summary,
             **selected,
         }
+        identity = escalation_from_facts(
+            {"account_status": customer.account_status.value}
+        )
+        if identity.escalate:
+            payload["needs_human"] = True
+            payload["policy_decision"] = {
+                "requires_human": True,
+                "escalation_trigger": "unusable_identity",
+            }
+        return payload
 
 
 async def supervisor_node(state: SupportState) -> dict[str, Any]:
@@ -172,6 +183,9 @@ def _internal_escalation_reason(state: SupportState) -> str:
                 return str(value)
         if decision.get("requires_human"):
             return "Policy requires human review"
+        trigger = decision.get("escalation_trigger")
+        if trigger:
+            return f"Escalation catalog: {trigger}"
     if state.get("needs_human"):
         return "Worker requested human handoff"
     return "Low confidence or unresolved issue"

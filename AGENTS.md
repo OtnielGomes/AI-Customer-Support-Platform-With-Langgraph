@@ -1,10 +1,10 @@
-# AI Customer Support Platform — Agent Guide
+# TechStore Support — Agent Guide
 
 Guide for Cursor agents working on this repository. Read this file first for context; rules in `.cursor/rules/` enforce conventions automatically.
 
 ## Project overview
 
-Agent-centric customer support platform: a **supervisor** classifies ticket intent, delegates to **domain agents** (billing, logistics, account), lets agents call **authorized tools** and **RAG** over a knowledge base, and **escalates to humans** when automation cannot resolve the case.
+Agent-centric **TechStore Support**: a **supervisor** classifies ticket intent, delegates to **domain agents** (billing, logistics, account), lets agents call **authorized tools** and **RAG** over a knowledge base, and **escalates to humans** when automation cannot resolve the case. The merchant is **TechStore**.
 
 **Repository:** `AI-Customer-Support-Platform-With-Langgraph`  
 **Backend package:** `app/` (Python / FastAPI).  
@@ -34,9 +34,9 @@ app/
 │   └── dependencies.py  # auth, DB, graph, Redis, customer identity
 ├── agents/              # supervisor, billing, logistics, account, escalation, tool_loop, prompts
 ├── graph/               # state, nodes, edges, workflow
-├── tools/               # billing/, logistics/, account/, knowledge_base/
+├── tools/               # billing/, logistics/, account/, escalation/, knowledge_base/
 ├── policies/            # deterministic policy engine (yaml + rules)
-├── synthetic/           # NexaCommerce world generator
+├── synthetic/           # TechStore world generator
 ├── retrieval/           # embeddings, retriever, reranker
 ├── security/            # authentication, authorization, permissions, guardrails, customer_identity
 ├── evaluation/          # datasets/, evaluators.py, metrics.py
@@ -89,7 +89,7 @@ This file (`AGENTS.md` at repo root) is the **project** agent guide. Do not conf
 | **next-dev-loop** | `.agents/skills/next-dev-loop/` | After UI edits, with `next dev` running — verify runtime via `/_next/mcp` + `agent-browser` (compile/type-check is not enough) |
 | **langfuse** | Cursor plugin (`langfuse` enabled in `.cursor/settings.json`) | Tracing, scores, datasets, prompt management, trace debugging |
 | **skill-creator** | `.cursor/skills/skill-creator/` | Creating, editing, or benchmarking Cursor skills for this project |
-| **nexa-synthetic-data** | `.cursor/skills/nexa-synthetic-data/` | **First** for NexaCommerce operational seed data — `company.yaml`, generator, coherent FKs, labeled anomalies (`SCN-*`). Do not invent order rows in `DEMO_*` dicts or RAG. |
+| **nexa-synthetic-data** | `.cursor/skills/nexa-synthetic-data/` | **First** for TechStore operational seed data — `company.yaml`, generator, coherent FKs, labeled anomalies (`SCN-*`). Do not invent order rows in `DEMO_*` dicts or RAG. |
 | **nexa-company-architecture** | `.cursor/skills/nexa-company-architecture/` | Evolving the FAQ chatbot into a three-source support platform (PostgreSQL facts, policy engine, RAG docs), scoped tools, evals, security tests. Invoke **after** synthetic-data if schema/seed is missing. |
 | **nexa-realtime-chat** | `.cursor/skills/nexa-realtime-chat/` | Live portal chat, email login, `ticket_messages`, SSE + Redis pub/sub, console inbox takeover, identity-first prompts. Also duplicate bubbles, escalation-reason leaks, duplicated human replies (after `project-setup` invariants). Do not add WebSockets or a product MCP. |
 
@@ -99,7 +99,7 @@ This file (`AGENTS.md` at repo root) is the **project** agent guide. Do not conf
 
 0. **New clone / env error / bootstrap / infra** → `project-setup`
 1. **Synthetic company data / seed / anomalies / `generate_data.py`** → `nexa-synthetic-data` (after `project-setup` if DB/migrations are involved)
-2. **NexaCommerce architecture (policy engine, DB-backed tools, KB split, evals)** → `nexa-company-architecture` → then layer skills below
+2. **TechStore architecture (policy engine, DB-backed tools, KB split, evals)** → `nexa-company-architecture` → then layer skills below
 3. **Live chat / portal email login / console inbox / SSE** → `nexa-realtime-chat` → `fastapi` (SSE) → `langgraph-docs` (stream + HITL)
 4. **New agent or graph feature** → `ecosystem-primer` → `langgraph-docs` → `ai-engineer-components` rule
 5. **New API endpoint** → `fastapi` → `ai-engineer-components` rule
@@ -278,3 +278,17 @@ Evaluation code lives in `app/evaluation/`; pytest wrappers in `tests/evaluation
 
 * **Code and docs in repo:** English.
 * **User communication:** Portuguese (per team preference in rules).
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in this repo's GitHub Issues (via `gh`). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Canonical roles map 1:1 to tracker labels (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` plus `docs/adr/` at the repo root. See `docs/agents/domain.md`.

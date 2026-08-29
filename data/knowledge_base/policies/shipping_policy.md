@@ -1,4 +1,4 @@
-# NexaCommerce Shipping Policy
+# TechStore Shipping Policy
 
 1. Cancellation is allowed only before the shipment leaves the warehouse.
 2. After `shipped`, `in_transit`, or `delivered`, the customer must use the return flow instead of cancel.

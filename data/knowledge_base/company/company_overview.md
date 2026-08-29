@@ -1,6 +1,6 @@
-# NexaCommerce — Company Overview
+# TechStore — Company Overview
 
-NexaCommerce is a Brazilian electronics e-commerce company.
+TechStore is a Brazilian electronics e-commerce company.
 
 - Country: Brazil
 - Currency: BRL

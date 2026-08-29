@@ -7,7 +7,6 @@ BILLING_WRITE = "billing:write"
 LOGISTICS_READ = "logistics:read"
 LOGISTICS_WRITE = "logistics:write"
 ACCOUNT_READ = "account:read"
-ACCOUNT_WRITE = "account:write"
 
 TOOL_PERMISSIONS: dict[str, list[str]] = {
     "get_order": [BILLING_READ, LOGISTICS_READ, READ],
@@ -24,5 +23,5 @@ TOOL_PERMISSIONS: dict[str, list[str]] = {
     "cancel_order": [LOGISTICS_WRITE, WRITE],
     "get_customer": [ACCOUNT_READ, READ],
     "verify_identity": [ACCOUNT_READ, READ],
-    "create_support_ticket": [ACCOUNT_WRITE, WRITE],
+    "evaluate_escalation": [READ],
 }

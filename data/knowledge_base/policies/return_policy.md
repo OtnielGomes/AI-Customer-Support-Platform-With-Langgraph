@@ -1,4 +1,4 @@
-# NexaCommerce Return Policy
+# TechStore Return Policy
 
 1. Returns apply to delivered (or shipped) orders.
 2. `final_sale` items are ineligible for preference returns.

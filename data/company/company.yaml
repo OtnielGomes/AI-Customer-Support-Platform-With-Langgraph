@@ -1,8 +1,7 @@
-# NexaCommerce world model — copy to data/company/company.yaml
-# Canonical constants for the generator, policy engine, and policy docs.
+# TechStore world model — canonical constants for the generator, policy engine, and Documents.
 
 company:
-  name: NexaCommerce
+  name: TechStore
   industry: ecommerce
   country: Brazil
   locale: pt_BR
@@ -30,6 +29,17 @@ support:
     start: "08:00"
     end: "20:00"
   timezone: America/Sao_Paulo
+
+payment:
+  methods:
+    - pix
+    - credit_card
+  off_channel_pix_forbidden: true
+  pix_timeout_hours: 24
+  fraud_review_enabled: true
+
+withdrawal:
+  legal_days: 7
 
 refund:
   standard_window_days: 30

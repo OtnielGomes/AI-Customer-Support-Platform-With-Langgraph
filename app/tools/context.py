@@ -31,6 +31,11 @@ def set_tool_context(context: ToolContext) -> None:
     _context.set(context)
 
 
+def clear_tool_context() -> None:
+    """Unbind tool context for the current task."""
+    _context.set(None)
+
+
 def get_tool_context() -> ToolContext | None:
     """Return the current tool context if configured."""
     return _context.get()

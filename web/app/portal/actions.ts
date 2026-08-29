@@ -11,7 +11,7 @@ export async function portalLoginAction(
 ): Promise<{ error: string } | void> {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   if (!email) {
-    return { error: "Informe o e-mail da sua conta NexaCommerce." };
+    return { error: "Informe o e-mail da sua conta TechStore." };
   }
   try {
     await validatePortalSession(email);

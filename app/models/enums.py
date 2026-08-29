@@ -1,4 +1,4 @@
-"""Shared StrEnum values for NexaCommerce operational tables."""
+"""Shared StrEnum values for TechStore operational tables."""
 
 import enum
 
@@ -44,7 +44,11 @@ class PaymentStatus(enum.StrEnum):
 
 
 class PaymentMethod(enum.StrEnum):
-    """Supported payment methods."""
+    """Payment methods. TechStore v1.0 writes PIX and credit card only.
+
+    Debit card and boleto remain as leftover persistence values and must not
+    be generated or exposed as current Facts.
+    """
 
     CREDIT_CARD = "credit_card"
     DEBIT_CARD = "debit_card"

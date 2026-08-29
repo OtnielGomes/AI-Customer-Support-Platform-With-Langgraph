@@ -1,4 +1,4 @@
-"""Generate coherent NexaCommerce operational data."""
+"""Generate coherent TechStore operational data."""
 
 from __future__ import annotations
 
