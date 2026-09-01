@@ -58,7 +58,7 @@ Invoke-Step "Running migrations" {
 }
 
 Invoke-Step "Seeding demo data" {
-    uv run python scripts/seed_demo.py
+    uv run python scripts/seed_demo.py --as-of today
 }
 
 Invoke-Step "Ingesting knowledge base" {

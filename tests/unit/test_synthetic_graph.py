@@ -6,7 +6,7 @@ from decimal import Decimal
 from app.models.enums import OrderStatus
 from app.synthetic import generate_world
 from app.synthetic.anomalies import ANOMALY_KINDS
-from app.synthetic.graph import load_company_yaml, simulation_now
+from app.synthetic.graph import HAPPY_PATH_MAX_AGE_DAYS, load_company_yaml, simulation_now
 
 
 def test_demo_seed_is_deterministic() -> None:
@@ -137,6 +137,39 @@ def test_simulation_now_parses() -> None:
     now = simulation_now(load_company_yaml())
     assert isinstance(now, datetime)
     assert now.tzinfo is not None
+
+
+def test_as_of_keeps_public_ids_and_shifts_dates() -> None:
+    """The same seed with a later anchor keeps ids and shifts Order dates together."""
+    company = load_company_yaml()
+    frozen = generate_world(profile="demo", seed=42, company=company)
+    shifted = generate_world(
+        profile="demo",
+        seed=42,
+        company=company,
+        as_of="2026-08-31T12:00:00-03:00",
+    )
+    assert [item.public_id for item in frozen.orders] == [item.public_id for item in shifted.orders]
+    delta = shifted.orders[0].created_at - frozen.orders[0].created_at
+    assert delta.days >= 16
+    for left, right in zip(frozen.orders, shifted.orders, strict=True):
+        assert (right.created_at - left.created_at) == delta
+
+
+def test_happy_path_orders_stay_within_recent_window() -> None:
+    """Non-SCN Orders are at most 15 days old and shipped ETAs stay in the future."""
+    company = load_company_yaml()
+    now = simulation_now(company)
+    world = generate_world(profile="demo", seed=42, company=company)
+    scn_customers = {item.customer_id for item in world.scenarios}
+    happy = [order for order in world.orders if order.customer_id not in scn_customers]
+    assert happy
+    for order in happy:
+        age = (now - order.created_at).days
+        assert 0 <= age <= HAPPY_PATH_MAX_AGE_DAYS
+        if order.status == "shipped":
+            assert order.estimated_delivery is not None
+            assert order.estimated_delivery >= now
 
 
 def test_generated_payments_use_pix_or_credit_card() -> None:

@@ -10,6 +10,7 @@ from typing import Any
 
 from app.policies.loader import load_company_config
 from app.synthetic.catalogs import catalog_slice, price, random_person_name
+from app.synthetic.clock import resolve_simulation_now
 from app.synthetic.records import (
     CustomerRecord,
     OrderItemRecord,
@@ -55,6 +56,7 @@ STATUS_WEIGHTS = [
     ("cancelled", 7),
     ("returned", 5),
 ]
+HAPPY_PATH_MAX_AGE_DAYS = 15
 DEFAULT_PAYMENT_METHODS = ["pix", "credit_card"]
 EMAIL_DOMAINS = ("gmail.com", "outlook.com", "uol.com.br", "nexamail.com")
 DEMO_LOGIN_EMAIL = "ana.costa@nexamail.com"
@@ -76,9 +78,13 @@ def allowed_payment_methods(company: dict[str, Any]) -> list[str]:
     return list(DEFAULT_PAYMENT_METHODS)
 
 
-def simulation_now(company: dict[str, Any]) -> datetime:
-    """Parse the frozen simulation clock."""
-    return datetime.fromisoformat(company["simulation"]["now"])
+def simulation_now(
+    company: dict[str, Any],
+    *,
+    as_of: str | datetime | None = None,
+) -> datetime:
+    """Resolve the simulation clock (frozen yaml, wall clock, or ``as_of``)."""
+    return resolve_simulation_now(company, as_of=as_of)
 
 
 def build_products(rng: SeededRNG, count: int) -> list[ProductRecord]:
@@ -349,7 +355,7 @@ def fill_happy_path(
     def _add_random_order(customer: CustomerRecord) -> None:
         product = rng.choice(world.products)
         status = _weighted_order_status(rng)
-        created_at = now - timedelta(days=rng.randint(2, 80))
+        created_at, estimated_offset, delivered_offset = _happy_path_timing(rng, now, status)
         add_order_bundle(
             world,
             rng,
@@ -359,6 +365,8 @@ def fill_happy_path(
             product,
             status=status,
             created_at=created_at,
+            estimated_offset_days=estimated_offset,
+            delivered_offset_days=delivered_offset,
         )
         owned[customer.id] = owned.get(customer.id, 0) + 1
 
@@ -374,6 +382,39 @@ def fill_happy_path(
         ]
         customer = rng.choice(eligible or world.customers)
         _add_random_order(customer)
+
+
+def _happy_path_timing(
+    rng: SeededRNG,
+    now: datetime,
+    status: str,
+) -> tuple[datetime, int, int | None]:
+    """Status-coherent created_at within the last ``HAPPY_PATH_MAX_AGE_DAYS``."""
+    if status in {"pending", "paid"}:
+        age = rng.randint(0, 2)
+        eta = rng.randint(5, 12)
+        return now - timedelta(days=age), eta, None
+    if status == "processing":
+        age = rng.randint(1, 4)
+        eta = rng.randint(5, 12)
+        return now - timedelta(days=age), eta, None
+    if status == "shipped":
+        age = rng.randint(1, 5)
+        eta = age + rng.randint(2, 6)
+        return now - timedelta(days=age), eta, None
+    if status == "delivered":
+        age = rng.randint(8, HAPPY_PATH_MAX_AGE_DAYS)
+        delivered = rng.randint(4, min(age, 10))
+        return now - timedelta(days=age), delivered, delivered
+    if status == "cancelled":
+        age = rng.randint(1, 10)
+        return now - timedelta(days=age), rng.randint(5, 12), None
+    if status == "returned":
+        age = rng.randint(10, HAPPY_PATH_MAX_AGE_DAYS)
+        delivered = rng.randint(4, min(age, 10))
+        return now - timedelta(days=age), delivered, delivered
+    age = rng.randint(1, HAPPY_PATH_MAX_AGE_DAYS)
+    return now - timedelta(days=age), rng.randint(3, 12), None
 
 
 def assign_public_ids(world: World) -> None:

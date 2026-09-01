@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { ChatWindow } from "@/components/portal/chat-window";
 import { ToolCallsTable } from "@/components/console/tool-calls-table";
 import { TraceTimeline } from "@/components/console/trace-timeline";
+import { TicketOrderPanel } from "@/components/order-summary-card";
 import { StatusBadge } from "@/components/status-badge";
 import type {
   AgentEventResponse,
@@ -96,6 +97,7 @@ export function InboxThread({
           </div>
           {error ? <p className="mt-2 text-xs text-rose-400">{error}</p> : null}
         </section>
+        <TicketOrderPanel order={ticket.order} variant="console" />
         {run ? <TraceTimeline run={run} events={events} /> : null}
         {events.length > 0 ? <ToolCallsTable events={events} /> : null}
       </aside>

@@ -35,7 +35,7 @@ async def get_order(order_id: str) -> dict[str, Any]:
     order = await load_order(context.session, order_id)
     if order is None or not scoped_to_customer(context, order.customer_id):
         return {"error": "Order not found", "order_id": order_id}
-    return order_to_dict(order)
+    return order_to_dict(order, include_items=True)
 
 
 @tool

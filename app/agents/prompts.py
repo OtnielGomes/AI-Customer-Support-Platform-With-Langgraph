@@ -29,11 +29,28 @@ def format_orders_summary(orders_summary: list[dict[str, Any]] | None) -> str:
     lines = ["Known orders for this customer:"]
     for item in orders_summary:
         public_id = item.get("public_id", "")
-        status = item.get("status", "")
+        status = item.get("status_label") or item.get("status", "")
+        payment = item.get("payment_status_label") or item.get("payment_status", "")
         total = item.get("total_amount", "")
         currency = item.get("currency", "BRL")
         created = (item.get("created_at") or "")[:10]
-        lines.append(f"- {public_id}: {status}, {created}, {currency} {total}")
+        paid_count = int(item.get("paid_payment_count") or 0)
+        payment_note = payment
+        if paid_count >= 2:
+            payment_note = f"{payment} ({paid_count} payments)"
+        line = f"- {public_id}: {status}, {payment_note}, {created}, {currency} {total}"
+        items = item.get("items") or []
+        if items:
+            names = ", ".join(
+                f"{row.get('quantity')}x {row.get('product_name')}" for row in items
+            )
+            eta = (item.get("estimated_delivery") or "")[:10]
+            extra = f"; items: {names}"
+            if eta:
+                extra += f"; ETA {eta}"
+            extra += " [this Ticket's Order]"
+            line += extra
+        lines.append(line)
     if len(orders_summary) == 1:
         lines.append("This customer has a single order. Use it without asking for the number.")
     return "\n".join(lines)

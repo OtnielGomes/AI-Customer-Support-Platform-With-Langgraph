@@ -11,15 +11,15 @@ from app.api.exceptions import TicketConflictError
 from app.api.schemas import (
     CreateConversationRequest,
     CustomerProfileResponse,
-    OrderSummary,
     PortalSessionRequest,
     TicketResponse,
 )
-from app.models.order import Order
+from app.models.order import Order, OrderItem
 from app.models.ticket import Ticket, TicketStatus
 from app.security.authorization import authorize_route
 from app.security.customer_identity import CustomerDep, resolve_customer_by_email
 from app.services import ticket_service
+from app.services.order_summary import order_to_api_summary
 
 router = APIRouter(prefix="/portal", tags=["portal"])
 
@@ -79,9 +79,15 @@ async def create_conversation(
 async def _profile(session, customer) -> CustomerProfileResponse:
     """Build the portal profile DTO."""
     orders_result = await session.execute(
-        select(Order).where(Order.customer_id == customer.id).order_by(Order.created_at.desc())
+        select(Order)
+        .options(
+            selectinload(Order.items).selectinload(OrderItem.product),
+            selectinload(Order.payments),
+        )
+        .where(Order.customer_id == customer.id)
+        .order_by(Order.created_at.desc())
     )
-    orders = list(orders_result.scalars().all())
+    orders = list(orders_result.scalars().unique().all())
     tickets_result = await session.execute(
         select(Ticket)
         .options(selectinload(Ticket.customer), selectinload(Ticket.resolution))
@@ -97,16 +103,6 @@ async def _profile(session, customer) -> CustomerProfileResponse:
         name=customer.name,
         customer_tier=customer.customer_tier.value,
         account_status=customer.account_status.value,
-        orders=[
-            OrderSummary(
-                id=order.id,
-                public_id=order.public_id,
-                status=order.status.value,
-                total_amount=str(order.total_amount),
-                currency=order.currency,
-                created_at=order.created_at,
-            )
-            for order in orders
-        ],
+        orders=[order_to_api_summary(order) for order in orders],
         conversations=[ticket_service.ticket_to_summary(ticket) for ticket in tickets],
     )

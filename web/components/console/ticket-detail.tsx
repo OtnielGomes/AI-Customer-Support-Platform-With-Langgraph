@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { ToolCallsTable } from "@/components/console/tool-calls-table";
 import { TraceTimeline } from "@/components/console/trace-timeline";
+import { TicketOrderPanel } from "@/components/order-summary-card";
 import { StatusBadge } from "@/components/status-badge";
 import type {
   AgentEventResponse,
@@ -41,6 +42,7 @@ export function TicketDetail({
         </div>
         <StatusBadge status={ticket.status} />
       </header>
+      <TicketOrderPanel order={ticket.order} variant="console" />
       <div className="flex gap-2">
         {(["conversation", "trace", "tools"] as const).map((item) => (
           <button

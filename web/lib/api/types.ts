@@ -62,19 +62,34 @@ export interface TicketResponse {
   resolution: string | null;
   escalated: boolean;
   order_id: string | null;
+  order: OrderSummary | null;
   last_message_at: string | null;
   assigned_agent: string | null;
   created_at: string | null;
   updated_at: string | null;
 }
 
+export interface OrderItemSummary {
+  product_name: string;
+  quantity: number;
+  line_total: string;
+}
+
 export interface OrderSummary {
   id: string;
   public_id: string;
+  display_number: string;
   status: string;
+  status_label: string;
+  payment_status: string;
+  payment_status_label: string;
+  paid_payment_count: number;
   total_amount: string;
   currency: string;
   created_at: string | null;
+  estimated_delivery: string | null;
+  actual_delivery: string | null;
+  items: OrderItemSummary[];
 }
 
 export interface ChatMessage {

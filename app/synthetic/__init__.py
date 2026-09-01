@@ -27,6 +27,7 @@ def generate_world(
     profile: str = "demo",
     seed: int | None = None,
     company: dict[str, Any] | None = None,
+    as_of: str | None = None,
 ) -> World:
     """Build a coherent in-memory company snapshot.
 
@@ -34,6 +35,7 @@ def generate_world(
         profile: ``demo``, ``v1``, or ``load``.
         seed: RNG seed; defaults to ``company.simulation.seed``.
         company: Loaded ``company.yaml`` mapping.
+        as_of: Clock override (``today`` or ISO-8601). ``None`` uses yaml.
 
     Returns:
         Populated ``World`` with integrity already asserted.
@@ -42,7 +44,7 @@ def generate_world(
         raise ValueError(f"Unknown profile {profile!r}. Expected one of {sorted(PROFILES)}")
     cfg = company or load_company_yaml()
     rng = SeededRNG(seed if seed is not None else int(cfg["simulation"]["seed"]))
-    now = simulation_now(cfg)
+    now = simulation_now(cfg, as_of=as_of)
     volumes = PROFILES[profile]
     world = World(products=build_products(rng, volumes["products"]))
     overlay_anomalies(world, rng, now, cfg, volumes["anomaly_copies"])

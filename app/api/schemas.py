@@ -82,15 +82,31 @@ class TakeoverRequest(BaseModel):
     agent: str = Field(default="console", max_length=255)
 
 
+class OrderItemSummary(BaseModel):
+    """Line item shown on an Order summary panel."""
+
+    product_name: str
+    quantity: int
+    line_total: str
+
+
 class OrderSummary(BaseModel):
-    """Compact order row for the portal and graph context."""
+    """Order Facts for the Customer Portal and Support Console panels."""
 
     id: uuid.UUID
     public_id: str
+    display_number: str
     status: str
+    status_label: str
+    payment_status: str
+    payment_status_label: str
+    paid_payment_count: int = 1
     total_amount: str
     currency: str
     created_at: datetime | None = None
+    estimated_delivery: datetime | None = None
+    actual_delivery: datetime | None = None
+    items: list[OrderItemSummary] = Field(default_factory=list)
 
 
 class ChatMessageResponse(BaseModel):
@@ -153,6 +169,7 @@ class TicketResponse(BaseModel):
     resolution: str | None = None
     escalated: bool = False
     order_id: uuid.UUID | None = None
+    order: OrderSummary | None = None
     last_message_at: datetime | None = None
     assigned_agent: str | None = None
     created_at: datetime | None = None

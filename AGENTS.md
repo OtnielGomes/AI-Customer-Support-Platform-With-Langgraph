@@ -64,51 +64,74 @@ scripts/                 # generate_data.py, seed_demo.py, ingest_kb.py
 | `ai-engineer-components.mdc` | `app/**`, `tests/**` | Layer map, LangGraph, API, RAG, testing |
 | `frontend-next.mdc` | `*.tsx`, `*.jsx`, `web/**`, `frontend/**` | Next.js/React — load Vercel + next-dev-loop skills |
 
-## Installed skills — when to invoke
+## Skills
 
-Read the skill file **before** implementing in that domain. Do not implement LangGraph, FastAPI, Langfuse, or Next.js patterns from memory.
+Read the matching skill **before** implementing in that domain. This file is the project agent guide; do not confuse it with `.agents/skills/vercel-react-best-practices/AGENTS.md`.
 
 **Where skills live**
 
 | Scope | Path | Notes |
 |-------|------|--------|
-| Project (CLI lockfile) | `.agents/skills/` | Installed via `npx skills add`; hashes in `skills-lock.json` |
-| Project (Cursor) | `.cursor/skills/` | Hand-authored / packaged Cursor skills |
-| Plugin | Cursor plugin | Langfuse — enabled in `.cursor/settings.json` |
+| Process + stack (CLI lockfile) | `.agents/skills/` | Installed via `npx skills add`; hashes in `skills-lock.json` |
+| Domain (this product) | `.cursor/skills/` | Hand-authored: `project-setup`, `synthetic-data`, `synthetic-policies`, `company-architecture`, `realtime-chat`, `skill-creator` |
 
-This file (`AGENTS.md` at repo root) is the **project** agent guide. Do not confuse it with `.agents/skills/vercel-react-best-practices/AGENTS.md` (compiled Vercel React rules).
+Two layers. **Process** (Matt) specifies and ships work. **Domain + stack** implement TechStore Support. Map of the process layer: `ask-matt`. Tracker, labels, and `CONTEXT.md` layout: `docs/agents/`.
+
+### Process (idea → ship)
+
+| Skill | Invoke when |
+|-------|-------------|
+| **grill-with-docs** | Sharpening an idea in this repo (writes `CONTEXT.md` / ADRs). Prefer this over `grill-me`. |
+| **to-spec** / **to-tickets** | Multi-session build: spec first, then tracer-bullet tickets with blockers. |
+| **implement** | Building a ticket or spec. Drives `tdd` at the seams below, then `code-review`. Commit only when the user asks. |
+| **tdd** | Red-green at the seams in **Testing strategy**: unit (mocked LLM/DB), integration (test DB). Evaluation datasets are not the red-green loop. |
+| **triage** | Incoming GitHub issues this session did not create. Tickets from `to-tickets` are already agent-ready. |
+| **diagnosing-bugs** | Hard / intermittent bugs. Get a tight red loop before theorising. |
+
+### Domain (TechStore Support)
 
 | Skill | Location | Invoke when |
 |-------|----------|-------------|
-| **project-setup** | `.agents/skills/project-setup/` | **First** for local setup, bootstrap, `.env`/Docker/ports, Windows fixes, migrations, seed, ingest, starting the API, portal `greenlet_spawn`, chat reply that vanishes until F5, `/events` reconnecting every ~15s, **duplicated chat bubbles**, **`Escalation reason:` in the transcript**, or a **human reply appearing twice**. Details: `references/runtime-invariants.md`. |
-| **ecosystem-primer** | `.agents/skills/ecosystem-primer/` | **First** for any LangChain/LangGraph/agent work — framework choice and next skill |
-| **fastapi** | `.agents/skills/fastapi/` | Routes, dependencies, Pydantic models, SSE streaming |
-| **langgraph-docs** | `.agents/skills/langgraph-docs/` | Graph design, multi-agent flows, HITL, checkpoints — fetch live docs via skill workflow |
-| **langgraph-cli** | `.agents/skills/langgraph-cli/` | `langgraph.json`, `langgraph dev/build/up`, local Docker lifecycle |
-| **vercel-react-best-practices** | `.agents/skills/vercel-react-best-practices/` | Writing, reviewing, or refactoring React/Next.js — then load matching files under that skill's `rules/` |
-| **next-dev-loop** | `.agents/skills/next-dev-loop/` | After UI edits, with `next dev` running — verify runtime via `/_next/mcp` + `agent-browser` (compile/type-check is not enough) |
-| **langfuse** | Cursor plugin (`langfuse` enabled in `.cursor/settings.json`) | Tracing, scores, datasets, prompt management, trace debugging |
-| **skill-creator** | `.cursor/skills/skill-creator/` | Creating, editing, or benchmarking Cursor skills for this project |
-| **nexa-synthetic-data** | `.cursor/skills/nexa-synthetic-data/` | **First** for TechStore operational seed data — `company.yaml`, generator, coherent FKs, labeled anomalies (`SCN-*`). Do not invent order rows in `DEMO_*` dicts or RAG. |
-| **nexa-company-architecture** | `.cursor/skills/nexa-company-architecture/` | Evolving the FAQ chatbot into a three-source support platform (PostgreSQL facts, policy engine, RAG docs), scoped tools, evals, security tests. Invoke **after** synthetic-data if schema/seed is missing. |
-| **nexa-realtime-chat** | `.cursor/skills/nexa-realtime-chat/` | Live portal chat, email login, `ticket_messages`, SSE + Redis pub/sub, console inbox takeover, identity-first prompts. Also duplicate bubbles, escalation-reason leaks, duplicated human replies (after `project-setup` invariants). Do not add WebSockets or a product MCP. |
+| **project-setup** | `.cursor/skills/project-setup/` | Clone, bootstrap, `.env`/Docker/ports, Windows, migrations, seed, ingest, API start, portal `greenlet_spawn`, chat reply that vanishes until F5, `/events` reconnecting every ~15s, duplicated chat bubbles, `Escalation reason:` in the transcript, human reply appearing twice. Details: `references/runtime-invariants.md`. |
+| **synthetic-data** | `.cursor/skills/synthetic-data/` | Operational seed: `company.yaml`, generator, coherent FKs, `SCN-*` anomalies. Facts go to PostgreSQL, never to RAG. |
+| **synthetic-policies** | `.cursor/skills/synthetic-policies/` | Policy v1.0: yaml constants, KB split, `app/policies/` mapping. |
+| **company-architecture** | `.cursor/skills/company-architecture/` | Three sources (facts / policy engine / RAG documents), scoped tools, evals, security tests. The Assistant does not create Tickets (ADR-0007). |
+| **realtime-chat** | `.cursor/skills/realtime-chat/` | Portal email login, `ticket_messages`, SSE + Redis, console inbox, Takeover, identity-first prompts. No WebSockets or product MCP. |
 
-`skills-lock.json` currently pins: `ecosystem-primer`, `fastapi`, `langgraph-cli`, `langgraph-docs`, `next-dev-loop`, `vercel-react-best-practices`. `project-setup`, `nexa-synthetic-data`, `nexa-company-architecture`, and `nexa-realtime-chat` are project-authored (not in the lockfile).
+### Stack (when implementing a layer)
+
+For this repo, `ecosystem-primer` selects **LangGraph** (custom control flow + HITL). Observability is **Langfuse**, not LangSmith.
+
+| Skill | Location | Invoke when |
+|-------|----------|-------------|
+| **ecosystem-primer** | `.agents/skills/ecosystem-primer/` | First for LangChain/LangGraph work — then load the LangGraph skill below, not a new harness. |
+| **langgraph-docs** | `.agents/skills/langgraph-docs/` | Graph design, supervisor + workers, live docs. |
+| **langgraph-human-in-the-loop** | `.agents/skills/langgraph-human-in-the-loop/` | `interrupt()` / `Command(resume=...)` for Escalation. |
+| **langgraph-persistence** | `.agents/skills/langgraph-persistence/` | Checkpointer, `thread_id`. This app uses `AsyncPostgresSaver` with `autocommit=True`. |
+| **fastapi** | `.agents/skills/fastapi/` | Routes, `Depends`, Pydantic, SSE. Chat transport still goes through `realtime-chat`. The UI lives in `web/`; skip `app.frontend()`. |
+| **langfuse** | `.agents/skills/langfuse/` | Traces, scores, datasets, prompt debugging. Env: `LANGFUSE_HOST`. |
+| **vercel-react-best-practices** | `.agents/skills/vercel-react-best-practices/` | React/Next.js in `web/` — load matching `rules/` files only. |
+| **next-dev-loop** | `.agents/skills/next-dev-loop/` | After UI edits, with `next dev` running — runtime check, not type-check alone. |
+| **skill-creator** | `.cursor/skills/skill-creator/` | New or improved project skills. |
+
+**Graph, retrieval, and deploy live in this package.** Agents: `StateGraph` supervisor in `app/graph/` + `app/agents/`. Retrieval: `app/retrieval/` + pgvector (`KnowledgeRetriever`). HTTP entry: FastAPI. Local/prod-like run: `docker-compose.yml` + `uv run fastapi dev`. There is no `langgraph.json`.
 
 ### Recommended skill order by task
 
-0. **New clone / env error / bootstrap / infra** → `project-setup`
-1. **Synthetic company data / seed / anomalies / `generate_data.py`** → `nexa-synthetic-data` (after `project-setup` if DB/migrations are involved)
-2. **TechStore architecture (policy engine, DB-backed tools, KB split, evals)** → `nexa-company-architecture` → then layer skills below
-3. **Live chat / portal email login / console inbox / SSE** → `nexa-realtime-chat` → `fastapi` (SSE) → `langgraph-docs` (stream + HITL)
-4. **New agent or graph feature** → `ecosystem-primer` → `langgraph-docs` → `ai-engineer-components` rule
-5. **New API endpoint** → `fastapi` → `ai-engineer-components` rule
-6. **RAG / retrieval** → `ecosystem-primer` (RAG section) → implement in `app/retrieval/` — documents only, never operational rows
-7. **Observability** → Langfuse skill + `app/observability/`
-8. **Evaluations** → `nexa-company-architecture` (case schema) → `app/evaluation/` + Langfuse datasets; pytest in `tests/evaluation/`
-9. **Docker / deploy** → `langgraph-cli` if using LangGraph Platform; otherwise `docker-compose.yml`
-10. **React / Next.js UI** → `vercel-react-best-practices` (then the relevant `rules/*.md`) → with `next dev` running, `next-dev-loop`
-11. **New or improved Cursor skill** → `skill-creator`
+0. **Unclear idea / new feature in this repo** → `grill-with-docs` (then `implement`, or `to-spec` → `to-tickets` if multi-session)
+1. **New clone / env error / bootstrap / infra** → `project-setup`
+2. **Synthetic company data / seed / anomalies / `generate_data.py`** → `synthetic-data` (after `project-setup` if DB/migrations are involved)
+3. **Policy yaml / KB / engine sync** → `synthetic-policies` → `company-architecture`
+4. **Scoped tools, evals, three-source changes** → `company-architecture` → then stack skills below
+5. **Live chat / portal email login / console inbox / SSE** → `realtime-chat` → `fastapi` (SSE) → `langgraph-docs` + `langgraph-human-in-the-loop`
+6. **New agent or graph feature** → `ecosystem-primer` → `langgraph-docs` → `ai-engineer-components` rule
+7. **New API endpoint** → `fastapi` → `ai-engineer-components` rule
+8. **RAG / retrieval** → extend `app/retrieval/` — documents only, never operational rows (`company-architecture`)
+9. **Observability** → `langfuse` + `app/observability/`
+10. **Evaluations** → `company-architecture` (case schema) → `app/evaluation/` + Langfuse datasets; pytest in `tests/evaluation/`
+11. **Docker / deploy** → `docker-compose.yml` (graph is served from FastAPI)
+12. **React / Next.js UI** → `vercel-react-best-practices` (matching `rules/*.md`) → with `next dev` running, `next-dev-loop`
+13. **New or improved Cursor skill** → `skill-creator`
 
 ## Development conventions
 
@@ -151,7 +174,7 @@ This file (`AGENTS.md` at repo root) is the **project** agent guide. Do not conf
 * Browser clients talk to `web/app/api/support/[...path]` (BFF). The BFF injects `X-API-Key` from `SUPPORT_API_KEY` and `X-Customer-Email` from the `portal_session` cookie — never `NEXT_PUBLIC_`.
 * Customer Portal: `/portal/login` (email), `/` (live chat home), `/tickets/[id]` (thread + SSE).
 * Support Console: `/console/inbox` (live conversations), `/console/inbox/[id]` (takeover), `/console/tickets`, `/console/analytics`. Cookie login at `/login`. `/console/escalations` redirects to the inbox filter.
-* Write/review UI with `vercel-react-best-practices` (load only the matching `rules/*.md`). Chat work: also read `nexa-realtime-chat`.
+* Write/review UI with `vercel-react-best-practices` (load only the matching `rules/*.md`). Chat work: also read `realtime-chat`.
 * After edits, if `next dev` is running, verify with `next-dev-loop` — not compile/type-check alone. Playwright MCP (user) is allowed; `.cursor/mcp.json` stays empty.
 
 ## Environment variables (typical)
@@ -193,7 +216,7 @@ Full mapping: `data/fixtures/demo_logins.json`.
 
 ## Local development
 
-Read **`project-setup`** skill (`.agents/skills/project-setup/`) for the full bootstrap and troubleshooting guide.
+Read **`project-setup`** skill (`.cursor/skills/project-setup/`) for the full bootstrap and troubleshooting guide.
 
 ### Quick path (Windows)
 
@@ -247,8 +270,6 @@ npm run dev          # http://localhost:3000
 npm run build
 npm run typecheck
 ```
-
-For LangGraph CLI workflows, see `langgraph-cli` skill (`langgraph dev`, `langgraph up`, etc.).
 
 ## Testing strategy
 

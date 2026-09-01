@@ -13,11 +13,13 @@ from app.agents.logistics import run_logistics_agent
 from app.agents.supervisor import classify_intent
 from app.graph.state import SupportState
 from app.models.customer import Customer
+from app.models.ticket import Ticket
 from app.observability.metrics import record_node_latency
 from app.policies.engine import escalation_from_facts
 from app.security.guardrails import GuardrailViolation, sanitize_input, validate_output
+from app.services.order_summary import build_orders_summary
 from app.tools.context import get_tool_context
-from app.tools.lookups import list_customer_orders, order_to_dict
+from app.tools.lookups import list_customer_orders
 
 logger = logging.getLogger(__name__)
 
@@ -79,13 +81,25 @@ async def load_customer_context_node(state: SupportState) -> dict[str, Any]:
         if customer is None:
             return {}
         orders = await list_customer_orders(context.session, customer.id)
-        summary = [order_to_dict(order) for order in orders]
+        bound_order_id = None
+        ticket_id = state.get("ticket_id")
+        if ticket_id:
+            try:
+                ticket = await context.session.get(Ticket, uuid.UUID(str(ticket_id)))
+            except ValueError:
+                ticket = None
+            if ticket is not None and ticket.order_id is not None:
+                bound_order_id = ticket.order_id
+        if bound_order_id is None and len(orders) == 1:
+            bound_order_id = orders[0].id
+        summary = build_orders_summary(orders, bound_order_id=bound_order_id)
         selected: dict[str, Any] = {}
-        if len(orders) == 1:
+        bound = next((item for item in orders if item.id == bound_order_id), None)
+        if bound is not None:
             selected = {
-                "order_public_id": orders[0].public_id,
-                "order_status": orders[0].status.value,
-                "order_total": str(orders[0].total_amount),
+                "order_public_id": bound.public_id,
+                "order_status": bound.status.value,
+                "order_total": str(bound.total_amount),
             }
         payload: dict[str, Any] = {
             "customer_public_id": customer.public_id,

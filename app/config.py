@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     include_injection_corpus: bool = False
     chat_stream_heartbeat_seconds: int = 15
     portal_allow_unknown_email: bool = False
+    simulation_as_of: str = "today"
 
     def parsed_cors_origins(self) -> list[str]:
         """Parse CORS_ORIGINS as a comma-separated origin list."""

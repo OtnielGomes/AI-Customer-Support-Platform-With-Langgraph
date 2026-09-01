@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select
@@ -17,7 +17,8 @@ from app.models.product import Product
 from app.models.return_request import ReturnRequest
 from app.models.shipment import Shipment
 from app.policies.loader import load_company_config
-from app.synthetic.graph import simulation_now
+from app.services.order_summary import order_to_dict as serialize_order
+from app.synthetic.clock import company_timezone, resolve_simulation_now
 from app.tools.context import ToolContext
 
 
@@ -44,7 +45,10 @@ async def load_customer(session: AsyncSession, identifier: str) -> Customer | No
 async def load_order(session: AsyncSession, identifier: str) -> Order | None:
     """Load an order by UUID or public_id, with items and product."""
     order_uuid = parse_uuid(identifier)
-    stmt = select(Order).options(selectinload(Order.items).selectinload(OrderItem.product))
+    stmt = select(Order).options(
+        selectinload(Order.items).selectinload(OrderItem.product),
+        selectinload(Order.payments),
+    )
     if order_uuid is not None:
         stmt = stmt.where(Order.id == order_uuid)
     else:
@@ -61,11 +65,22 @@ def scoped_to_customer(context: ToolContext, customer_id: uuid.UUID) -> bool:
 
 
 async def list_customer_orders(session: AsyncSession, customer_id: uuid.UUID) -> list[Order]:
-    """Load orders for one customer, newest first."""
+    """Load orders for one customer, newest first, with items and payments."""
     result = await session.execute(
-        select(Order).where(Order.customer_id == customer_id).order_by(Order.created_at.desc())
+        select(Order)
+        .options(
+            selectinload(Order.items).selectinload(OrderItem.product),
+            selectinload(Order.payments),
+        )
+        .where(Order.customer_id == customer_id)
+        .order_by(Order.created_at.desc())
     )
-    return list(result.scalars().all())
+    return list(result.scalars().unique().all())
+
+
+def order_to_dict(order: Order, *, include_items: bool = False) -> dict[str, Any]:
+    """Serialize an order header, optionally with line items."""
+    return serialize_order(order, include_items=include_items)
 
 
 def customer_to_dict(customer: Customer) -> dict[str, Any]:
@@ -81,32 +96,18 @@ def customer_to_dict(customer: Customer) -> dict[str, Any]:
     }
 
 
-def order_to_dict(order: Order) -> dict[str, Any]:
-    """Serialize an order header."""
-    return {
-        "id": str(order.id),
-        "public_id": order.public_id,
-        "customer_id": str(order.customer_id),
-        "status": order.status.value,
-        "total_amount": str(order.total_amount),
-        "currency": order.currency,
-        "created_at": order.created_at.isoformat() if order.created_at else None,
-        "estimated_delivery": (
-            order.estimated_delivery.isoformat() if order.estimated_delivery else None
-        ),
-        "actual_delivery": order.actual_delivery.isoformat() if order.actual_delivery else None,
-    }
-
-
 def days_since_delivery(order: Order) -> int | None:
-    """Whole days between delivery and the company simulation clock (or now)."""
+    """Whole days between delivery and the simulation clock."""
     delivered = order.actual_delivery
     if delivered is None:
         return None
     try:
-        now = simulation_now(load_company_config())
+        from app.config import get_settings
+
+        as_of = get_settings().simulation_as_of
+        now = resolve_simulation_now(load_company_config(), as_of=as_of or None)
     except Exception:
-        now = datetime.now(timezone.utc)
+        now = datetime.now(company_timezone(load_company_config()))
     if delivered.tzinfo is None:
         delivered = delivered.replace(tzinfo=now.tzinfo)
     return max(0, (now - delivered).days)

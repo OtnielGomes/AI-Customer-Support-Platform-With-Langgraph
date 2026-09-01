@@ -21,10 +21,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-async def _run(profile: str, seed: int, replace: bool) -> None:
+async def _run(profile: str, seed: int, replace: bool, as_of: str | None) -> None:
     """Generate, optionally replace, persist, and export fixtures."""
     company = load_company_yaml()
-    world = generate_world(profile=profile, seed=seed, company=company)
+    world = generate_world(profile=profile, seed=seed, company=company, as_of=as_of)
     factory = get_session_factory()
     async with factory() as session:
         existing = await operational_row_count(session)
@@ -53,10 +53,15 @@ def main() -> None:
     parser.add_argument("--profile", choices=["demo", "v1", "load"], default="demo")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--replace", action="store_true")
+    parser.add_argument(
+        "--as-of",
+        default=None,
+        help="Simulation clock: 'today' or an ISO-8601 instant. Default: frozen yaml.",
+    )
     args = parser.parse_args()
 
     async def _main() -> None:
-        await _run(args.profile, args.seed, args.replace)
+        await _run(args.profile, args.seed, args.replace, args.as_of)
 
     if sys.platform == "win32":
         asyncio.run(_main(), loop_factory=asyncio.SelectorEventLoop)

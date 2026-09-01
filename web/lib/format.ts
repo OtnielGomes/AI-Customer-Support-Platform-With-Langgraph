@@ -6,10 +6,29 @@ export function formatDate(value: string | null | undefined): string {
   if (Number.isNaN(date.getTime())) {
     return value;
   }
-  return new Intl.DateTimeFormat("en", {
+  return new Intl.DateTimeFormat("pt-BR", {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(date);
+}
+
+export function formatDateOnly(value: string | null | undefined): string {
+  if (!value) {
+    return "—";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "medium" }).format(date);
+}
+
+export function formatMoney(amount: string, currency = "BRL"): string {
+  const parsed = Number.parseFloat(amount);
+  if (Number.isNaN(parsed)) {
+    return `${currency} ${amount}`;
+  }
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency }).format(parsed);
 }
 
 export function formatMs(value: number | null | undefined): string {

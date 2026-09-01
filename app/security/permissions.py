@@ -10,7 +10,7 @@ ACCOUNT_READ = "account:read"
 
 TOOL_PERMISSIONS: dict[str, list[str]] = {
     "get_order": [BILLING_READ, LOGISTICS_READ, READ],
-    "get_order_items": [BILLING_READ, READ],
+    "get_order_items": [BILLING_READ, LOGISTICS_READ, READ],
     "get_payments": [BILLING_READ, READ],
     "get_payment_status": [BILLING_READ, READ],
     "check_refund_eligibility": [BILLING_READ, READ],

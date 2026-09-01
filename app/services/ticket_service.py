@@ -30,12 +30,14 @@ from app.api.schemas import (
 )
 from app.models.agent_run import AgentEvent, AgentRun, AgentRunStatus
 from app.models.customer import Customer
+from app.models.order import Order, OrderItem
 from app.models.resolution import Resolution
 from app.models.ticket import Ticket, TicketIntent, TicketStatus
 from app.models.ticket_message import TicketMessage, TicketMessageRole
 from app.observability.metrics import get_metrics
 from app.observability.trace_recorder import TraceRecorder, extract_interrupt_payload
 from app.security.guardrails import sanitize_customer_answer
+from app.services.order_summary import order_to_api_summary
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +46,12 @@ async def get_ticket_or_404(session: AsyncSession, ticket_id: uuid.UUID) -> Tick
     """Load a ticket with customer and resolution, or raise 404."""
     result = await session.execute(
         select(Ticket)
-        .options(selectinload(Ticket.resolution), selectinload(Ticket.customer))
+        .options(
+            selectinload(Ticket.resolution),
+            selectinload(Ticket.customer),
+            selectinload(Ticket.order).selectinload(Order.items).selectinload(OrderItem.product),
+            selectinload(Ticket.order).selectinload(Order.payments),
+        )
         .where(Ticket.id == ticket_id)
     )
     ticket = result.scalar_one_or_none()
@@ -74,6 +81,7 @@ def ticket_to_response(ticket: Ticket) -> TicketResponse:
         resolution=resolution_text,
         escalated=escalated,
         order_id=ticket.order_id,
+        order=order_to_api_summary(ticket.order) if ticket.order is not None else None,
         last_message_at=ticket.last_message_at,
         assigned_agent=ticket.assigned_agent,
         created_at=ticket.created_at,

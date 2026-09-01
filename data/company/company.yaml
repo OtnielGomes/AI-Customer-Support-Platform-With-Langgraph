@@ -9,7 +9,9 @@ company:
   timezone: America/Sao_Paulo
 
 simulation:
-  # All relative dates ("35 days ago") are computed from this instant.
+  # frozen: use simulation.now (CI/evals). wall_clock: datetime.now(tz).
+  clock: frozen
+  # All relative dates ("35 days ago") are computed from this instant when frozen.
   now: "2026-08-14T12:00:00-03:00"
   seed: 42
 
@@ -72,3 +74,21 @@ products:
     - headphones
     - keyboards
     - accessories
+
+# Customer-facing labels for enums (DB stores English snake_case keys).
+labels:
+  order_status:
+    pending: "Aguardando pagamento"
+    paid: "Pago"
+    processing: "Em processamento"
+    shipped: "Enviado"
+    delivered: "Entregue"
+    cancelled: "Cancelado"
+    returned: "Devolvido"
+  payment_status:
+    pending: "Pagamento pendente"
+    authorized: "Autorizado"
+    paid: "Pago"
+    failed: "Falhou"
+    refunded: "Estornado"
+    partially_refunded: "Estorno parcial"

@@ -10,7 +10,7 @@ from langchain_core.tools import tool
 from app.models.enums import InspectionStatus, ReturnReason, ReturnStatus
 from app.models.return_request import ReturnRequest
 from app.policies.engine import can_cancel
-from app.tools.billing.tools import get_order
+from app.tools.billing.tools import get_order, get_order_items
 from app.tools.context import ToolContext, require_context
 from app.tools.lookups import load_order, load_returns, load_shipment, scoped_to_customer
 
@@ -150,6 +150,7 @@ async def create_return_request(
 
 LOGISTICS_TOOLS = [
     get_order,
+    get_order_items,
     get_shipment,
     get_shipping_status,
     get_return_status,

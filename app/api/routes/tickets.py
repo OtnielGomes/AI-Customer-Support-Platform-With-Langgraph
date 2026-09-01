@@ -81,22 +81,8 @@ async def create_ticket(
         body.description,
     )
     await session.refresh(ticket, attribute_names=["created_at", "updated_at", "last_message_at"])
-    await session.refresh(found)
-
-    return TicketResponse(
-        id=ticket.id,
-        customer_id=ticket.customer_id,
-        customer_email=found.email,
-        customer_name=found.name,
-        subject=ticket.subject,
-        description=ticket.description,
-        status=ticket.status,
-        order_id=ticket.order_id,
-        last_message_at=ticket.last_message_at,
-        assigned_agent=ticket.assigned_agent,
-        created_at=ticket.created_at,
-        updated_at=ticket.updated_at,
-    )
+    loaded = await ticket_service.get_ticket_or_404(session, ticket.id)
+    return ticket_service.ticket_to_response(loaded)
 
 
 @router.get("", response_model=TicketListResponse)

@@ -39,7 +39,7 @@ A support case opened by a Customer (or the Support Console) in TechStore Suppor
 _Avoid_: Conversation, Chat (as the case), Case
 
 **Assistant**:
-The single customer-facing voice of TechStore Support on a Ticket. Supervisor and domain workers (billing, logistics, account) are internal; they are not authors in the transcript. The Assistant does not open a second Ticket to split work or to reach a Human Agent — that is Escalation or a new Ticket started in the UI.
+The single customer-facing voice of TechStore Support on a Ticket. Supervisor and domain workers (billing, logistics, account) are internal; they are not authors in the transcript. The Assistant does not open a second Ticket to split work or to reach a Human Agent — that is Escalation or a new Ticket started in the UI. In the transcript the Assistant cites an Order by `public_id` (`ORD-xxxxx`), not by the Pedido label.
 _Avoid_: Bot, AI (as the role), Billing Agent / Logistics Agent / Account Agent as visible authors
 
 **Escalation**:
@@ -99,8 +99,8 @@ How the Customer paid in TechStore v1.0: PIX or credit card only.
 _Avoid_: Boleto, debit card, Payment as a synonym of Payment Method
 
 **Order**:
-A TechStore purchase: items, total, shipping address, delivery deadline, and delivery method (Sedex vs standard — an attribute, not an entity). Fulfillment is the Order status (pending through delivered), not a separate noun.
-_Avoid_: Delivery or Fulfillment as entities; Purchase, transaction
+A TechStore purchase: items, total, shipping address, delivery deadline, and delivery method (Sedex vs standard — an attribute, not an entity). Fulfillment is the Order status (pending through delivered), not a separate noun. The Fact identifier is `public_id` (`ORD-xxxxx`). Customer-facing copy may say Pedido plus the numeric part; that label is not a second identifier and is not a lookup key.
+_Avoid_: Delivery or Fulfillment as entities; Purchase, transaction; ORDER- as a prefix; treating “Pedido 01001” as the tool argument
 
 **Payment**:
 A money capture for an Order. v1.0 has one Payment per Order; two Payments exist only in a labeled duplicate-charge case.
