@@ -179,9 +179,6 @@ async def run_tool_loop(
         if catalog.reasons:
             merged_decision["escalation_trigger"] = catalog.reasons[0].lower()
         policy_decision = merged_decision
-    lowered = answer.lower()
-    if "escalat" in lowered:
-        needs_human = True
 
     return {
         "draft_answer": answer,

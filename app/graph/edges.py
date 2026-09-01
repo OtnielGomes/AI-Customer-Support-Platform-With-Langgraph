@@ -2,7 +2,6 @@
 
 from typing import Literal
 
-from app.agents.supervisor import should_route_to_worker
 from app.graph.state import SupportState
 from app.policies.engine import should_escalate
 
@@ -29,23 +28,23 @@ def _catalog_requires_escalation(state: SupportState) -> bool:
 def route_after_supervisor(state: SupportState) -> Literal[
     "billing", "logistics", "account", "escalation"
 ]:
-    """Route to domain worker or escalation based on intent."""
+    """Route to a domain worker or Escalation from post-supervisor state.
+
+    Known domains go to that worker regardless of classifier confidence.
+    Unknown intent defaults to logistics (Order Facts). Escalation is only
+    the closed catalog, engine ``requires_human``, or ``needs_human`` already set.
+    """
     if _catalog_requires_escalation(state):
         return "escalation"
 
     intent = state.get("intent", "unknown")
-    confidence = state.get("confidence", 0.0)
-
-    if not should_route_to_worker(intent, confidence):
-        return "escalation"
-
     if intent == "billing":
         return "billing"
     if intent == "logistics":
         return "logistics"
     if intent == "account":
         return "account"
-    return "escalation"
+    return "logistics"
 
 
 def route_after_worker(state: SupportState) -> Literal["resolution", "escalation"]:

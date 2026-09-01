@@ -39,12 +39,12 @@ A support case opened by a Customer (or the Support Console) in TechStore Suppor
 _Avoid_: Conversation, Chat (as the case), Case
 
 **Assistant**:
-The single customer-facing voice of TechStore Support on a Ticket. Supervisor and domain workers (billing, logistics, account) are internal; they are not authors in the transcript. The Assistant does not open a second Ticket to split work or to reach a Human Agent — that is Escalation or a new Ticket started in the UI. In the transcript the Assistant cites an Order by `public_id` (`ORD-xxxxx`), not by the Pedido label.
+The single customer-facing voice of TechStore Support on a Ticket. Supervisor and domain workers (billing, logistics, account) are internal; they are not authors in the transcript. The Assistant does not open a second Ticket to split work or to reach a Human Agent — that is Escalation or a new Ticket started in the UI. In the transcript the Assistant cites an Order by `public_id` (`ORD-xxxxx`), not by the Pedido label. An Order Fact question stays with the Assistant: items, status, “tell me about this order”, or generic help (a short summary of the Ticket’s Order — or the only Order — then what they need). No Order, or a lookup that fails, is an in-thread answer — not Escalation. The specialist-forwarding sentence is Escalation copy only. Unclear domain is not a pause.
 _Avoid_: Bot, AI (as the role), Billing Agent / Logistics Agent / Account Agent as visible authors
 
 **Escalation**:
-A mandatory pause: the Assistant must not resolve the Ticket. The closed list is: engine-required human (high-value, inspection, or identity not usable); delivered-but-missing; fraud; Customer demanding an exception after a lawful refusal; privacy beyond own profile; product technical assistance. A lawful refusal explained by the Assistant is not Escalation until the Customer insists on an exception. The Assistant may add Escalation; it must not execute a write the rules forbade.
-_Avoid_: Takeover, intervention (as the only word), handoff (ambiguous)
+A mandatory pause: the Assistant must not resolve the Ticket. The closed list is: engine-required human (high-value, inspection, or identity not usable); delivered-but-missing; fraud; Customer demanding an exception after a lawful refusal; privacy beyond own profile; product technical assistance. A lawful refusal explained by the Assistant is not Escalation until the Customer insists on an exception. Looking up Order Facts, generic help with an Order, and unclear domain or low classifier confidence are not Escalation. The Assistant may add Escalation; it must not execute a write the rules forbade.
+_Avoid_: Takeover, intervention (as the only word), handoff (ambiguous), using Escalation as the dump for unknown routing
 
 **Takeover**:
 A Human Agent voluntarily claims a Ticket, including when there is no Escalation.

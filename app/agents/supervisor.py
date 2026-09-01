@@ -3,7 +3,7 @@
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
-from app.config import build_chat_model, get_settings
+from app.config import build_chat_model
 
 
 class IntentClassification(BaseModel):
@@ -34,10 +34,3 @@ async def classify_intent(user_message: str) -> IntentClassification:
     if isinstance(result, IntentClassification):
         return result
     return IntentClassification(intent="unknown", confidence=0.0, rationale="parse_error")
-
-
-def should_route_to_worker(intent: str, confidence: float) -> bool:
-    """Determine if intent is confident enough for domain worker."""
-    settings = get_settings()
-    known_intents = {"billing", "logistics", "account"}
-    return intent in known_intents and confidence >= settings.supervisor_confidence_threshold

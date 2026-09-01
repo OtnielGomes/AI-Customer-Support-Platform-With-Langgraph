@@ -71,4 +71,9 @@ def test_compose_worker_prompt_includes_identity_block() -> None:
     assert IDENTITY_BLOCK in prompt
     assert "Ana Costa" in prompt
     assert "Never ask for their email" in prompt
-    assert "specialist who will review their problem" in prompt
+    assert "specialist who will review their problem" not in prompt
+    assert "forwarding them to a specialist" not in prompt
+    assert "generic help" in prompt.lower()
+    assert "could not be loaded" in prompt.lower()
+    assert "that is not escalation" in prompt.lower()
+    assert "do not list every order when the ticket already has one" in prompt.lower()

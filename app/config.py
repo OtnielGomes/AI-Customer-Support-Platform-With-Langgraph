@@ -37,7 +37,6 @@ class Settings(BaseSettings):
     otel_exporter_otlp_endpoint: str = ""
     otel_service_name: str = "ai-customer-support"
 
-    supervisor_confidence_threshold: float = 0.7
     cors_origins: str = ""
     include_injection_corpus: bool = False
     chat_stream_heartbeat_seconds: int = 15
