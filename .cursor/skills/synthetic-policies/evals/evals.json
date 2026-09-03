@@ -1,0 +1,42 @@
+{
+  "skill_name": "synthetic-policies",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Split TechStore commercial policy v1.0 into data/knowledge_base/ per synthetic-policies kb-split.md. Replace NexaCommerce with TechStore. Payment policy must list only PIX and credit card. withdrawal_policy.md must state 7-day CDC arrependimento; refund_policy.md must keep 30-day commercial window and R$1000 threshold matching company.yaml.",
+      "expected_output": "Focused policy/procedure/faq markdown files with testable numbered rules and yaml-consistent numbers.",
+      "files": [],
+      "expectations": [
+        "No single file contains the entire 24-section policy unsplit",
+        "payment_policy.md mentions pix and credit_card only",
+        "withdrawal_policy.md contains 7-day arrependimento rule",
+        "refund_policy.md contains 30, 1000, and 0.10 matching yaml",
+        "All customer-facing brand references say TechStore not NexaCommerce"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Extend data/company/company.yaml and app/policies/rules.py for policy v1.0: withdrawal.legal_days=7 separate from refund.standard_window_days=30, and shipping.damage_report_hours=48 documented in engine-vs-rag. Add unit tests for day-5 withdrawal eligible and day-10 withdrawal denied.",
+      "expected_output": "Yaml keys, can_refund withdrawal reason path, and pytest table cases.",
+      "files": [],
+      "expectations": [
+        "company.yaml has withdrawal.legal_days and shipping.damage_report_hours",
+        "Engine distinguishes withdrawal from customer_preference",
+        "test_policy_docs_sync.py includes 7 and 48 in respective policy files",
+        "No LLM imports in app/policies/rules.py"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Map SCN-DOUBLE-PAY-001 and SCN-REFUND-OUTSIDE-WINDOW-001 to intent taxonomy policy_types and document which tools and policy_ids the billing agent must call. Update an eval case in app/evaluation/datasets/ without inventing order IDs.",
+      "expected_output": "Intent labels PAYMENT and REFUND with tool sequence and engine reason codes tied to existing fixtures.",
+      "files": [],
+      "expectations": [
+        "DOUBLE-PAY maps to policy_type PAYMENT and duplicate_charge engine path",
+        "OUTSIDE-WINDOW maps to REFUND with OUTSIDE_WINDOW reason",
+        "Eval cases reference SCN-* ids that exist in synthetic_scenarios or scenarios.json",
+        "Document lists check_refund_eligibility before create_refund_request"
+      ]
+    }
+  ]
+}

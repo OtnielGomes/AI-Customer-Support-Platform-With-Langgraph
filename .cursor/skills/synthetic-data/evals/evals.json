@@ -1,0 +1,44 @@
+{
+  "skill_name": "synthetic-data",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "In this AI Customer Support Platform repo, design and implement the v1 TechStore synthetic data generator: company.yaml, operational SQLAlchemy models + Alembic migration, scripts/generate_data.py with --profile demo --seed 42, and labeled anomalies including double payment. Keep existing UUID ticket/customer PKs. Do not put order rows in the knowledge base.",
+      "expected_output": "A generator that writes coherent PostgreSQL rows with public_ids, FK integrity, company.yaml, and SCN-DOUBLE-PAY scenario; demo profile is deterministic.",
+      "files": [],
+      "expectations": [
+        "Keeps UUID primary keys and adds public_id columns rather than replacing PKs with CUST-0001 strings",
+        "Does not rename the tickets table to support_tickets",
+        "Creates or updates data/company/company.yaml with refund.standard_window_days and simulation now",
+        "Generator builds customer → order → items → payments → shipment graph with reconciled totals",
+        "Includes a labeled double_payment anomaly with two paid payments for one order",
+        "CLI uses SelectorEventLoop on Windows",
+        "Does not write operational order/payment rows into data/knowledge_base/"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Add synthetic scenarios for delayed shipment, delivered-but-missing, refund outside 30-day window, and high-value refund above R$1000. Export fixtures that evaluation cases can reference by stable IDs.",
+      "expected_output": "Anomaly catalog implemented in DB + scenarios.json with stable SCN-* ids and Portuguese user messages.",
+      "files": [],
+      "expectations": [
+        "Delayed shipment has estimated_delivery before simulation_now and is not delivered",
+        "Delivered-missing sets shipment delivered with customer_received false",
+        "Outside-window case has delivery older than company.yaml refund window",
+        "High-value refund is pending_approval / requires_human_approval true",
+        "Fixture IDs are stable (SCN- prefix) not random UUIDs only"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Replace scripts/seed_demo.py so local bootstrap gets a small but coherent TechStore dataset instead of a single demo ticket, without generating 10,000 customers by default.",
+      "expected_output": "seed_demo or bootstrap runs --profile demo; v1/load remain explicit flags.",
+      "files": [],
+      "expectations": [
+        "Default/local seed uses the demo profile not load/10k",
+        "Demo profile still contains every anomaly kind",
+        "Bootstrap path still runs after alembic upgrade"
+      ]
+    }
+  ]
+}

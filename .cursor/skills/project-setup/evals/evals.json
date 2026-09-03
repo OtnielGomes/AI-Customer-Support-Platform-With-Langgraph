@@ -1,0 +1,56 @@
+{
+  "skill": "project-setup",
+  "evals": [
+    {
+      "id": 0,
+      "name": "first-time-bootstrap",
+      "prompt": "Acabei de clonar o repositório AI Customer Support no Windows. Como configuro o ambiente e subo a API?",
+      "assertions": [
+        "Mentions .env.example or copying .env",
+        "Mentions bootstrap.ps1 or equivalent uv sync + docker compose steps",
+        "Uses database port 5433 for local host",
+        "Mentions fastapi dev or fastapi run"
+      ]
+    },
+    {
+      "id": 1,
+      "name": "postgres-auth-failed",
+      "prompt": "Alembic falha com password authentication failed for user postgres em localhost:5432. O que fazer?",
+      "assertions": [
+        "Identifies port conflict with local PostgreSQL",
+        "Recommends port 5433 or checking DATABASE_URL",
+        "Mentions docker compose db service"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "checkpointer-startup-error",
+      "prompt": "fastapi dev falha no startup: CREATE INDEX CONCURRENTLY cannot run inside a transaction block. Como corrigir?",
+      "assertions": [
+        "Points to LangGraph checkpointer setup in workflow.py",
+        "Mentions autocommit=True on AsyncConnectionPool"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "portal-greenlet-spawn",
+      "prompt": "No portal, ao enviar a primeira mensagem em Como podemos ajudar hoje?, a UI mostra {\"detail\":\"Internal server error\",\"error\":\"greenlet_spawn has not been called; can't call await_only() here.\"}. O que é e como corrigir?",
+      "assertions": [
+        "Identifies AsyncSession lazy-load / MissingGreenlet",
+        "Points to POST /portal/conversations or ticket_to_response after flush",
+        "Recommends get_ticket_or_404 or selectinload before serializing"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "assistant-reply-vanishes",
+      "prompt": "No chat do portal o assistente responde, a mensagem aparece cerca de um segundo e some. Só volta se eu recarregar o navegador. Como corrigir sem inventar WebSockets?",
+      "assertions": [
+        "Does not recommend WebSockets",
+        "Mentions use-chat-stream or SSE leftover/CRLF parser or done.answer",
+        "Warns against resetting messages from stale initialMessages",
+        "Mentions Redis get_message timeout or not wait_for on listen if discussing /events"
+      ]
+    }
+  ]
+}

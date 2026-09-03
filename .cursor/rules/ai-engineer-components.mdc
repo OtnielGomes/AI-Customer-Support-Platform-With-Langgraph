@@ -1,0 +1,90 @@
+---
+description: "Layer map and patterns for app/ — FastAPI + LangGraph customer support"
+globs:
+  - "app/**/*.py"
+  - "tests/**/*.py"
+alwaysApply: false
+---
+
+Backend-only. This rule covers the Python package `app/` and `tests/`. For React/Next.js UI, use the `frontend-next` rule and skills `vercel-react-best-practices` + `next-dev-loop`. Do not put a Next.js app inside `app/`.
+
+# Layer Map
+
+| Layer | Path | Responsibility |
+|-------|------|----------------|
+| API routes | `app/api/routes/` | HTTP handlers (`tickets.py`, `portal.py`, `health.py`) — thin; no graph or DB logic |
+| API deps | `app/api/dependencies.py` | Auth, DB session, compiled graph, Redis, optional customer identity — inject via `Depends` |
+| Agents | `app/agents/` | Domain agent nodes: `supervisor`, `billing`, `logistics`, `account`, `escalation`; shared `prompts.py` |
+| Graph | `app/graph/` | `state.py`, `nodes.py`, `edges.py`, `workflow.py` — compile once at startup |
+| Tools | `app/tools/<domain>/` | One `@tool` per external action; grouped by domain + `knowledge_base/` |
+| Policies | `app/policies/` | Deterministic eligibility (`can_refund`, `can_cancel`); loads `data/company/company.yaml` |
+| Synthetic | `app/synthetic/` | Coherent TechStore graph generator (not RAG) |
+| Retrieval | `app/retrieval/` | `embeddings.py`, `retriever.py`, `reranker.py` — pgvector-backed RAG |
+| Security | `app/security/` | Auth, authorization, permissions, guardrails — enforce before tool execution |
+| Evaluation | `app/evaluation/` | Datasets, evaluators, metrics — offline agent quality, not unit tests |
+| Observability | `app/observability/` | Logging, OTel tracing, metrics — Langfuse for LLM spans |
+| Models | `app/models/` | tickets, ticket_messages, customers, orders, payments, shipments, returns, refunds |
+| Services | `app/services/` | ticket listing, graph runner, analytics, `chat_bus.py` (Redis pub/sub) |
+| Config | `app/config.py` | Settings (`pydantic-settings`), LLM factory, connection URLs |
+
+# LangGraph
+
+* Graph state in `app/graph/state.py` as `TypedDict` or Pydantic model — no loose dicts between nodes.
+* Nodes are pure: read state → call tool/retriever/agent → return partial state update.
+* Supervisor routes intent in `app/agents/supervisor.py`; workers handle billing, logistics, account.
+* Escalation agent decides human handoff; persist escalation outcome on the ticket model. **`draft_answer` is customer-facing only** — put `Escalation reason` on the interrupt payload, never in `ticket_messages`.
+* Compile graph in `workflow.py`; invoke via `graph.ainvoke()` / `astream()` from async routes.
+* Checkpointing: PostgreSQL via `AsyncPostgresSaver` in `create_checkpointer()` — pool **must** use `kwargs={"autocommit": True}` because setup migrations run `CREATE INDEX CONCURRENTLY`.
+* `stream_mode=["updates", "messages"]`: emit SSE `token`s only from incremental `AIMessageChunk`s (`chat_service._token_text`). Complete node `AIMessage`s are conversation history, not extra tokens.
+
+```python
+# ✅ GOOD — route delegates to compiled graph
+@router.post("/tickets/{ticket_id}/resolve", response_model=ResolutionResponse)
+async def resolve_ticket(
+    ticket_id: UUID,
+    body: ResolveRequest,
+    graph: CompiledGraph = Depends(get_support_graph),
+) -> ResolutionResponse:
+    result = await graph.ainvoke({"ticket_id": ticket_id, "messages": body.messages})
+    return ResolutionResponse.model_validate(result)
+```
+
+# Tools & RAG
+
+* Register tools with explicit names and descriptions — the LLM contract depends on them.
+* Domain tools live under `app/tools/billing/`, `logistics/`, `account/`; KB search in `knowledge_base/`.
+* Retrieval pipeline: embed → pgvector search → optional rerank → inject into agent context.
+* Run guardrails (`app/security/guardrails.py`) before returning tool output to the model or user. `sanitize_customer_answer` / `validate_output` run on `draft_answer` before persist.
+
+# API (FastAPI)
+
+* Use `Annotated[..., Depends(...)]` for parameters and dependencies.
+* Pydantic models for request/response at route boundary; never expose raw DB models.
+* Streaming ticket replies: SSE via `EventSourceResponse`. Write path is `POST /tickets/{id}/messages` (`token` / `tool` / `message` / `status` / `done` / `heartbeat`). Fan-out is `GET /tickets/{id}/events` via Redis channel `ticket:{id}:events` in `app/services/chat_bus.py`. Do not add WebSockets.
+* Human console turn: persist `human_agent` once. If the graph is not interrupted, publish `message` only (`done.answer` empty). After HITL resume, `should_persist_assistant_message` must skip an assistant row that duplicates that human text.
+* Persist customer-facing text through `sanitize_customer_answer` (`app/security/guardrails.py`) — strips `Escalation reason:` and collapsed duplicate copies.
+* Portal identity: `X-Customer-Email` resolved in `app/security/customer_identity.py`. Unknown emails 404 — never insert a Customer from the portal.
+* Graph workers receive a conversation window plus `orders_summary` from `load_customer_context`. Shared style/identity prompts live in `app/agents/prompts.py`.
+* Load `fastapi` skill for path operations, dependencies, streaming, and Pydantic patterns. Load `realtime-chat` for chat/SSE/inbox work.
+
+# Persistence & cache
+
+* DB session via `Depends` in `dependencies.py`; commit/rollback in route or dedicated repository — not inside graph nodes.
+* PostgreSQL `StrEnum` columns: use `Enum(MyEnum, name="...", values_callable=lambda x: [e.value for e in x])` — never persist enum member names to PG enums.
+* Redis: cache embeddings, retriever results, or rate limits — always with TTL and explicit keys.
+* Knowledge base source files: `data/knowledge_base/` (policies/procedures/faq only — never operational rows); vectors in PostgreSQL/pgvector.
+* Company constants: `data/company/company.yaml`. Policy engine in `app/policies/` must match yaml numbers.
+* Local host DB port: **5433** (`DATABASE_URL`); Docker `api` service uses `db:5432` on the compose network.
+
+# Testing
+
+* `tests/unit/` — tools, nodes, guardrails, retriever logic (mocked LLM/DB).
+* `tests/integration/` — API + graph with test DB and mocked provider.
+* `tests/evaluation/` — dataset runs via `app/evaluation/`; compare metrics across prompt/graph changes.
+
+# Rules
+
+* One compiled graph per support workflow; reuse tools and agents across nodes.
+* Instantiate LLM clients once via `config.py` factory; inject — never hardcode model names in nodes.
+* Blocking I/O in async paths: `asyncio.to_thread` or async clients (HTTPX, asyncpg).
+* Do not regress live-chat invariants in `project-setup` `references/runtime-invariants.md` (§2d duplicate tokens, §2e human reply, §3 escalation reason).

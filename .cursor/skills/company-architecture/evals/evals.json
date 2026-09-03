@@ -1,0 +1,41 @@
+{
+  "skill_name": "company-architecture",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Adapt this LangGraph customer-support repo so agents look up orders and payments in PostgreSQL instead of DEMO_* dicts, and so refund eligibility is decided by a Python policy engine (30-day window, R$1000 human approval) rather than the LLM. Keep the existing app/ layout and UUID tickets table. Do not add MCP.",
+      "expected_output": "A plan or implementation that adds app/policies/, DB-backed tools, no new top-level package, no MCP, tickets table kept.",
+      "files": [],
+      "expectations": [
+        "Does not create a new top-level Python package or rename tickets to support_tickets",
+        "Does not add MCP servers",
+        "Puts deterministic refund rules in app/policies (or equivalent Python), not only in prompts",
+        "Replaces or plans replacement of DEMO_INVOICES / DEMO_SHIPMENTS as source of truth",
+        "Keeps RAG for documents and PostgreSQL for order facts (does not index order rows in kb_chunks)"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "A delivered order is 35 days old. The customer wants a refund for preference. Separately, another customer has a defective laptop outside the 30-day refund window but inside warranty. How should the agent decide?",
+      "expected_output": "Preference denied by refund window; defect path consults warranty policy + engine; LLM does not invent a gold exception unless yaml says so.",
+      "files": [],
+      "expectations": [
+        "Preference refund after 35 days is denied by policy engine using delivery date",
+        "Defective case requires combining refund policy and warranty policy",
+        "Does not recommend putting these facts only in vector search without an engine call"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Restructure data/knowledge_base for NexaCommerce policies, procedures, and FAQs, and add evaluation cases for duplicate payment plus negative tests (ignore policy, leak payment data). Tie cases to synthetic scenario IDs.",
+      "expected_output": "KB tree company/policies/procedures/faq; eval JSON with expected_tools; security cases that must refuse; injection corpus not ingested by default.",
+      "files": [],
+      "expectations": [
+        "KB paths include policies/refund_policy.md (or equivalent) with testable numeric rules",
+        "Evaluation case for duplicate payment expects get_order and get_payments",
+        "Negative cases exist and expected resolution is refuse / no unauthorized refund",
+        "Malicious KB injection is not part of default ingest"
+      ]
+    }
+  ]
+}

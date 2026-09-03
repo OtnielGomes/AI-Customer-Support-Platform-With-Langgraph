@@ -1,0 +1,21 @@
+# TechStore — policy extensions (copy into data/company/company.yaml)
+
+policy:
+  version: "1.0"
+  effective_date: "2026-08-01"
+
+payment:
+  methods:
+    - pix
+    - credit_card
+  off_channel_pix_forbidden: true
+
+withdrawal:
+  legal_days: 7
+
+shipping:
+  damage_report_hours: 48
+  no_store_pickup: true
+
+fraud:
+  additional_verification_enabled: true

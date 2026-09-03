@@ -1,0 +1,41 @@
+{
+  "skill_name": "realtime-chat",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Turn the customer portal into a live chat. Customers log in with the email they use on the store. The system must already know their orders and ask which order they need help with. Do not use WebSockets. Keep FastAPI + the Next.js BFF.",
+      "expected_output": "Plan or implementation with email portal session, X-Customer-Email, ticket_messages, SSE + Redis pub/sub, load_customer_context, no WebSockets, no implicit Customer insert.",
+      "files": [],
+      "expectations": [
+        "Uses SSE (not WebSockets) for live updates",
+        "Identifies the customer by email against existing customers; does not create customers on unknown emails",
+        "Loads the customer's orders before the agent asks for an order id",
+        "Persists conversation messages (not only ticket.description + resolutions.answer)",
+        "Keeps the Next.js BFF and does not put Next.js inside app/"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Adapt the support console so humans see the same live conversation as the customer and can take over when the graph escalates.",
+      "expected_output": "Console inbox with live transcript, takeover, human replies on the same messages endpoint, escalations redirect.",
+      "files": [],
+      "expectations": [
+        "Adds a live inbox (not only SSR ticket tables)",
+        "Human takeover is a first-class action",
+        "Human replies reuse the ticket message stream / HITL resume",
+        "Does not invent a second conversation store for the console"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Agent replies show raw **bold** in the UI. Fix prompts and rendering. Also stop the agent from asking a logged-in customer for their email or for ORD-xxxxx when they have a single order.",
+      "expected_output": "Shared prompt style + identity blocks; markdown whitelist in assistant bubbles; normalize_markdown guardrail.",
+      "files": [],
+      "expectations": [
+        "Prompts forbid decorative bold and headings",
+        "UI renders markdown only for assistant bubbles with a tight whitelist, or strips it",
+        "Identity-first: one order is used automatically; never ask for email when authenticated"
+      ]
+    }
+  ]
+}
