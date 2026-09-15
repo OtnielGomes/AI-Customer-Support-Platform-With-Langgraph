@@ -29,8 +29,6 @@ As ferramentas ficam no escopo do cliente autenticado. Números críticos (prazo
 
 A UI Next.js fala com o FastAPI por um BFF, para que as chaves de API nunca cheguem ao navegador.
 
-Vocabulário de domínio e regras do produto: [CONTEXT.md](CONTEXT.md). Mapa de agentes e camadas: [AGENTS.md](AGENTS.md).
-
 ## Funcionalidades
 
 - **Orquestração multiagente** — o supervisor LangGraph delega para workers de billing, logística e conta.
@@ -234,7 +232,7 @@ curl -X POST http://localhost:8000/tickets/{ticket_id}/resolve \
   -d '{"messages": [{"role": "user", "content": "Please refund duplicate charge on INV-1001"}]}'
 ```
 
-O chat do portal usa `POST /tickets/{id}/messages` e `GET /tickets/{id}/events` (SSE). Veja [AGENTS.md](AGENTS.md) para o mapa completo da API e da camada de agentes.
+O chat do portal usa `POST /tickets/{id}/messages` e `GET /tickets/{id}/events` (SSE).
 
 ## Estrutura do projeto
 
@@ -260,8 +258,6 @@ scripts/              # generate_data, seed_demo, ingest_kb
 tests/                # unit, integration, evaluation
 Images/               # capturas de tela do README
 ```
-
-Guia de desenvolvimento de agentes e convenções: [AGENTS.md](AGENTS.md).
 
 ## Testes
 
@@ -289,6 +285,8 @@ Um deploy próximo de produção na **DigitalOcean App Platform** separa as mesm
 - **Valkey / Redis** — cache e pub/sub do chat
 - **Jobs de seed / ingest** — dados sintéticos da TechStore e documentos da base de conhecimento
 
+![DigitalOcean App Platform — API, web, PostgreSQL, Valkey e job de seed](Images/deploy-components.png)
+
 ## Troubleshooting
 
 | Sintoma | Correção |
@@ -298,10 +296,8 @@ Um deploy próximo de produção na **DigitalOcean App Platform** separa as mesm
 | `ProactorEventLoop` no seed/ingest | Use os `scripts/` atuais — no Windows é preciso `SelectorEventLoop` |
 | API falha com `CREATE INDEX CONCURRENTLY` | O pool do checkpointer precisa de `autocommit=True` em `app/graph/workflow.py` |
 | Loop de reload do `fastapi dev` em `.venv` | Use `uv run fastapi run` ou pare o `uv sync` enquanto o servidor roda |
-| Resposta do assistente só aparece depois de F5 | Veja os invariantes de chat ao vivo em [AGENTS.md](AGENTS.md) e `.cursor/skills/project-setup/` |
-| Bolhas de chat duplicadas | Idem — tokens SSE só de chunk, sem draft residual depois de `done` |
-
-Guia completo de bootstrap e runtime: [`.cursor/skills/project-setup/`](.cursor/skills/project-setup/).
+| Resposta do assistente só aparece depois de F5 | Confirme que o Redis está no ar e recarregue o portal |
+| Bolhas de chat duplicadas | Recarregue a página; o último turno do assistente não deve se repetir |
 
 ## Variáveis de ambiente
 

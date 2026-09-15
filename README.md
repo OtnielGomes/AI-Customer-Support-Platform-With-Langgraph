@@ -29,8 +29,6 @@ Tools are scoped to the authenticated customer. Critical numbers (return windows
 
 The Next.js UI talks to FastAPI through a BFF so API keys never reach the browser.
 
-Domain vocabulary and product rules: [CONTEXT.md](CONTEXT.md). Agent and layer map: [AGENTS.md](AGENTS.md).
-
 ## Features
 
 - **Multi-agent orchestration** — LangGraph supervisor delegates to billing, logistics, and account workers.
@@ -234,7 +232,7 @@ curl -X POST http://localhost:8000/tickets/{ticket_id}/resolve \
   -d '{"messages": [{"role": "user", "content": "Please refund duplicate charge on INV-1001"}]}'
 ```
 
-Portal chat uses `POST /tickets/{id}/messages` and `GET /tickets/{id}/events` (SSE). See [AGENTS.md](AGENTS.md) for the full API and agent layer map.
+Portal chat uses `POST /tickets/{id}/messages` and `GET /tickets/{id}/events` (SSE).
 
 ## Project structure
 
@@ -260,8 +258,6 @@ scripts/              # generate_data, seed_demo, ingest_kb
 tests/                # unit, integration, evaluation
 Images/               # README screenshots
 ```
-
-Agent development guide and conventions: [AGENTS.md](AGENTS.md).
 
 ## Testing
 
@@ -289,6 +285,8 @@ A production-like deploy on **DigitalOcean App Platform** splits the same pieces
 - **Valkey / Redis** — cache and chat pub/sub
 - **Seed / ingest jobs** — synthetic TechStore data and knowledge-base documents
 
+![DigitalOcean App Platform — API, web, PostgreSQL, Valkey, seed job](Images/deploy-components.png)
+
 ## Troubleshooting
 
 | Symptom | Fix |
@@ -298,10 +296,8 @@ A production-like deploy on **DigitalOcean App Platform** splits the same pieces
 | `ProactorEventLoop` in seed/ingest | Use latest `scripts/` — Windows needs `SelectorEventLoop` |
 | API fails with `CREATE INDEX CONCURRENTLY` | Checkpointer pool needs `autocommit=True` in `app/graph/workflow.py` |
 | `fastapi dev` reload loop on `.venv` | Use `uv run fastapi run` or stop `uv sync` while the server runs |
-| Assistant reply only appears after F5 | See live-chat invariants in [AGENTS.md](AGENTS.md) and `.cursor/skills/project-setup/` |
-| Duplicated chat bubbles | Same — chunk-only SSE tokens, no leftover draft after `done` |
-
-Full bootstrap and runtime guide: [`.cursor/skills/project-setup/`](.cursor/skills/project-setup/).
+| Assistant reply only appears after F5 | Confirm Redis is running, then reload the portal |
+| Duplicated chat bubbles | Reload the page; the last assistant turn should not replay |
 
 ## Environment variables
 
