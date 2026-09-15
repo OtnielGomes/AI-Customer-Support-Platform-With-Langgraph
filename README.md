@@ -15,7 +15,7 @@ The product is **TechStore Support**: a Customer Portal for shoppers and a Suppo
 
 [Overview](#overview) · [Features](#features) · [Architecture](#architecture) · [Screenshots](#screenshots) · [Getting started](#getting-started) · [Demo scenarios](#demo-scenarios) · [API](#api) · [Project structure](#project-structure) · [Testing](#testing) · [Deployment](#deployment)
 
-![Live chat — assistant answering when an order will arrive](Images/order-interaction-0.png)
+![Live chat — assistant answering when an order will arrive](Images/order-interaction-0_EN.png)
 
 ## Overview
 
@@ -82,17 +82,17 @@ flowchart TD
 
 Email-only login. Unknown addresses are rejected; the portal never creates customers.
 
-![Customer portal login](Images/interface-portal-customer.png)
+![Customer portal login](Images/interface-portal-customer_EN.png)
 
 After sign-in, TechStore Support recognizes the customer's orders and opens a live chat from the same screen.
 
-![Customer home with orders](Images/portal-customer-orders.png)
+![Customer home with orders](Images/portal-customer-orders_EN.png)
 
 Routine questions — estimated delivery, payment status, items — are answered from PostgreSQL, not from the model's memory.
 
 When automation cannot resolve the case (payment mismatch, exception, identity check), the ticket escalates and a human continues in the same thread.
 
-![Escalation and human reply in the portal](Images/order-interaction-4-human-intervection.png)
+![Escalation and human reply in the portal](Images/order-interaction-4-human-intervection_EN.png)
 
 ### Support Console
 
@@ -102,7 +102,7 @@ Dark-themed console for the support team: live inbox, takeover, tickets, and ana
 
 On an escalated ticket the agent sees the transcript, order summary, and the tool trail the assistant already ran — then takes over with **Assumir conversa**.
 
-![Human takeover with order context and tool trace](Images/chat-console-suport.png)
+![Human takeover with order context and tool trace](Images/chat-console-suport_EN.png)
 
 ### Analytics
 
@@ -114,7 +114,7 @@ Agent telemetry: ticket volume, escalation rate, average confidence, run latency
 
 Jailbreak and prompt-injection attempts are ignored. The assistant stays on TechStore policy and escalates instead of executing unauthorized refunds.
 
-![Jailbreak attempt refused; case forwarded to a human](Images/jailbreak-simulation.png)
+![Jailbreak attempt refused; case forwarded to a human](Images/jailbreak-simulation_EN.png)
 
 ## Getting started
 
