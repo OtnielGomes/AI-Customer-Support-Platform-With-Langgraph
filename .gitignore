@@ -19,6 +19,14 @@ credentials.json
 .idea/
 .vscode/
 
+# Cursor / agent tooling (local only — not published to GitHub)
+.agents/
+.cursor/
+docs/
+AGENTS.md
+CONTEXT.md
+skills-lock.json
+
 # Testing
 .pytest_cache/
 .coverage
