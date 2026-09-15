@@ -7,34 +7,40 @@
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-pgvector-4169E1?style=flat-square&logo=postgresql&logoColor=white)](https://github.com/pgvector/pgvector)
 [![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat-square&logo=redis&logoColor=white)](https://redis.io/)
 
-Production-oriented customer support for **TechStore**: a **supervisor** routes tickets to domain workers that look up **operational facts in PostgreSQL**, retrieve **policies via RAG**, and enforce **deterministic rules** before any refund or cancellation. The LLM does not invent order state. The product is **TechStore Support**.
+**Language:** English | [Português](README.pt-BR.md)
+
+Customer support for **TechStore**, a fictional Brazilian electronics retailer. A LangGraph **supervisor** routes each ticket to billing, logistics, or account workers. Those workers look up **order facts in PostgreSQL**, retrieve **policy documents via RAG**, and run **deterministic rules** before any refund or cancellation. The LLM does not invent order state.
+
+The product is **TechStore Support**: a Customer Portal for shoppers and a Support Console for human agents.
 
 [Overview](#overview) · [Features](#features) · [Architecture](#architecture) · [Screenshots](#screenshots) · [Getting started](#getting-started) · [Demo scenarios](#demo-scenarios) · [API](#api) · [Project structure](#project-structure) · [Testing](#testing) · [Deployment](#deployment)
 
-![Live support chat — AI agent answering a shipping inquiry](Images/chat-interação-assistente.png)
+![Live chat — assistant answering when an order will arrive](Images/order-interaction-0.png)
 
 ## Overview
 
-This is not a FAQ chatbot. It is an agent-centric support platform where:
+This is not a FAQ chatbot. TechStore Support answers from three sources of truth:
 
-- **PostgreSQL** holds customers, orders, payments, shipments, and tickets — the source of truth for facts.
-- **RAG (pgvector)** indexes policy documents, procedures, and FAQs from `data/knowledge_base/`.
+- **PostgreSQL** holds customers, orders, payments, shipments, and tickets — facts, never invented by the model.
 - **Policy engine** (`app/policies/`, `data/company/company.yaml`) evaluates refund windows, approval thresholds, and shipping rules in Python before the model acts.
+- **RAG (pgvector)** indexes procedures and FAQs from `data/knowledge_base/` — documents that explain policy, not operational rows.
 
-Tools are scoped to the ticket customer. Critical numbers (30-day window, BRL 1000 approval) live in `company.yaml` and are never left to the LLM alone.
+Tools are scoped to the authenticated customer. Critical numbers (return windows, BRL approval limits) live in `company.yaml` and are never left to the LLM alone.
 
-The stack includes a **Customer Portal** (email login + live chat) and a **Support Console** (inbox, human takeover, tickets, analytics). The Next.js UI talks to FastAPI through a BFF so API keys never reach the browser.
+The Next.js UI talks to FastAPI through a BFF so API keys never reach the browser.
+
+Domain vocabulary and product rules: [CONTEXT.md](CONTEXT.md). Agent and layer map: [AGENTS.md](AGENTS.md).
 
 ## Features
 
 - **Multi-agent orchestration** — LangGraph supervisor delegates to billing, logistics, and account workers.
 - **Three knowledge sources** — operational DB, deterministic policies, and RAG over static documents.
-- **Scoped tools** — `get_order`, `get_payments`, `get_shipment`, `check_refund_eligibility`, and more, bound to the authenticated customer.
-- **Human-in-the-loop** — escalation with console inbox takeover; human replies persist as `human_agent`.
-- **Live chat** — SSE token streaming, Redis pub/sub fan-out, `ticket_messages` persistence.
+- **Scoped tools** — `get_order`, `get_payments`, `get_shipment`, `check_refund_eligibility`, and more, bound to the ticket customer.
+- **Live chat** — SSE token streaming, Redis pub/sub fan-out, persisted `ticket_messages`.
+- **Human-in-the-loop** — escalation pauses automation; a human takes over from the console inbox.
+- **Guardrails** — jailbreak and prompt-injection attempts are refused; out-of-policy refunds are not executed.
 - **Synthetic TechStore world** — reproducible demo data with labeled anomalies (`SCN-*`) for evals.
-- **Observability** — OpenTelemetry traces and Langfuse for LLM/tool runs.
-- **Evaluation harness** — pytest suites plus dataset metrics in `app/evaluation/`.
+- **Observability** — OpenTelemetry traces, Langfuse for LLM/tool runs, and an analytics console (latency, escalation rate, tool calls).
 
 ## Architecture
 
@@ -65,7 +71,7 @@ flowchart TD
 | Agents | LangGraph (supervisor + domain workers) |
 | LLM | OpenAI-compatible (configured via env) |
 | RAG | PostgreSQL + pgvector |
-| Cache / live events | Redis |
+| Cache / live events | Redis (Valkey in cloud) |
 | Observability | OpenTelemetry, Langfuse |
 | Frontend | Next.js 16 (Customer Portal + Support Console) |
 | Infrastructure | Docker, Docker Compose, GitHub Actions |
@@ -74,53 +80,41 @@ flowchart TD
 
 ### Customer Portal
 
-Email-only login — unknown addresses are rejected; customers are never created from the portal.
+Email-only login. Unknown addresses are rejected; the portal never creates customers.
 
-![Customer portal login](Images/interface-suporte-cliente.png)
+![Customer portal login](Images/interface-portal-customer.png)
 
-Live chat with streaming assistant replies grounded in real order data.
+After sign-in, TechStore Support recognizes the customer's orders and opens a live chat from the same screen.
 
-![Support chat with AI agent](Images/chat-interação-assistente.png)
+![Customer home with orders](Images/portal-customer-orders.png)
 
-When automation cannot resolve the case, the ticket escalates and a human specialist continues the thread.
+Routine questions — estimated delivery, payment status, items — are answered from PostgreSQL, not from the model's memory.
 
-![Escalation to human agent](Images/chat-interação-assistente-para-humano.png)
+When automation cannot resolve the case (payment mismatch, exception, identity check), the ticket escalates and a human continues in the same thread.
 
-![Human agent reply in the portal](Images/chat-human-response.png)
-
-Customers can mark a conversation as resolved when the issue is closed.
-
-![Resolved conversation](Images/resolvido.png)
+![Escalation and human reply in the portal](Images/order-interaction-4-human-intervection.png)
 
 ### Support Console
 
-Dark-themed console for the support team: inbox, ticket management, and analytics.
+Dark-themed console for the support team: live inbox, takeover, tickets, and analytics.
 
-![Support console](Images/interface-suporte-console.png)
+![Support console inbox](Images/interface-portal-console-suport.png)
 
-![Live inbox with escalated conversations](Images/interface-inbox.png)
+On an escalated ticket the agent sees the transcript, order summary, and the tool trail the assistant already ran — then takes over with **Assumir conversa**.
 
-![Human takeover in the console](Images/interface-human-interation.png)
+![Human takeover with order context and tool trace](Images/chat-console-suport.png)
 
-![Ticket list](Images/interface-tickets.png)
+### Analytics
 
-![Analytics — escalation rate, intent mix, tool latency](Images/interface-analytics.png)
+Agent telemetry: ticket volume, escalation rate, average confidence, run latency, intent mix, and per-tool error rate / p95 latency.
 
-![Console resources overview](Images/interface-console-recourses.png)
+![Analytics — escalation rate, latency, and tool calls](Images/analytics.png)
 
-### API, data stores, and deployment
+### Security
 
-![API health check](Images/health-check.png)
+Jailbreak and prompt-injection attempts are ignored. The assistant stays on TechStore policy and escalates instead of executing unauthorized refunds.
 
-![FastAPI running locally](Images/terminal-api.png)
-
-![Next.js frontend dev server](Images/terminal-frontend.png)
-
-![PostgreSQL with pgvector](Images/database-postgree.png)
-
-![Redis (Valkey) for cache and chat pub/sub](Images/database-valkey-redis.png)
-
-![Deployed components on App Platform](Images/deploy-components.png)
+![Jailbreak attempt refused; case forwarded to a human](Images/jailbreak-simulation.png)
 
 ## Getting started
 
@@ -201,6 +195,19 @@ Full login list: [`data/fixtures/demo_logins.json`](data/fixtures/demo_logins.js
 
 The demo customer (`demo@test.com.br`) covers ten labeled scenarios — double payment, delayed shipment, refund outside window, high-value refund, and more. Each row in `demo_manual_tests.md` lists the order ID, suggested message, expected tools, and whether human escalation is expected.
 
+```bash
+uv run python scripts/generate_data.py --profile demo --seed 42
+uv run python scripts/generate_data.py --profile v1 --seed 42 --replace
+```
+
+| Profile | Description |
+|---------|-------------|
+| `demo` | Local smoke — every anomaly kind |
+| `v1` | 1000 customers / 3000 orders |
+| `load` | Optional load-test scale |
+
+Fixtures are written to `data/fixtures/scenarios.json`. Do not put order rows in the knowledge base.
+
 ## API
 
 All endpoints require the `X-API-Key` header (default: `dev-key` from `.env.example`).
@@ -251,6 +258,7 @@ data/
 
 scripts/              # generate_data, seed_demo, ingest_kb
 tests/                # unit, integration, evaluation
+Images/               # README screenshots
 ```
 
 Agent development guide and conventions: [AGENTS.md](AGENTS.md).
@@ -263,22 +271,7 @@ uv run pytest tests/integration -v
 uv run pytest tests/evaluation -v
 ```
 
-Evaluation thresholds live in `app/evaluation/metrics.py` (intent accuracy, tool-call correctness, policy compliance, unauthorized-action rate = 0). Publish measured scores only after a real eval run.
-
-## Synthetic data
-
-```bash
-uv run python scripts/generate_data.py --profile demo --seed 42
-uv run python scripts/generate_data.py --profile v1 --seed 42 --replace
-```
-
-| Profile | Description |
-|---------|-------------|
-| `demo` | Local smoke — every anomaly kind |
-| `v1` | 1000 customers / 3000 orders |
-| `load` | Optional load-test scale |
-
-Fixtures are written to `data/fixtures/scenarios.json`. Do not put order rows in the knowledge base.
+Unit + integration suites currently pass **160 tests** at about **70%** coverage. Evaluation thresholds live in `app/evaluation/metrics.py` (intent accuracy, tool-call correctness, policy compliance, unauthorized-action rate = 0). Publish measured scores only after a real eval run.
 
 ## Deployment
 
@@ -288,7 +281,13 @@ Docker Compose runs the full stack locally (`db`, `redis`, `api`, `web`):
 docker compose up -d
 ```
 
-For cloud deployment, the platform typically splits into an API service, a Next.js web service, PostgreSQL (pgvector), Redis, and optional seed/ingest jobs — as shown in the App Platform overview above.
+A production-like deploy on **DigitalOcean App Platform** splits the same pieces into separate services:
+
+- **API** — FastAPI + LangGraph
+- **Web** — Next.js Customer Portal and Support Console
+- **PostgreSQL** (pgvector) — operational facts and embeddings
+- **Valkey / Redis** — cache and chat pub/sub
+- **Seed / ingest jobs** — synthetic TechStore data and knowledge-base documents
 
 ## Troubleshooting
 
@@ -299,10 +298,10 @@ For cloud deployment, the platform typically splits into an API service, a Next.
 | `ProactorEventLoop` in seed/ingest | Use latest `scripts/` — Windows needs `SelectorEventLoop` |
 | API fails with `CREATE INDEX CONCURRENTLY` | Checkpointer pool needs `autocommit=True` in `app/graph/workflow.py` |
 | `fastapi dev` reload loop on `.venv` | Use `uv run fastapi run` or stop `uv sync` while the server runs |
-| Assistant reply only appears after F5 | See live-chat invariants in [AGENTS.md](AGENTS.md) and `.agents/skills/project-setup/` |
+| Assistant reply only appears after F5 | See live-chat invariants in [AGENTS.md](AGENTS.md) and `.cursor/skills/project-setup/` |
 | Duplicated chat bubbles | Same — chunk-only SSE tokens, no leftover draft after `done` |
 
-Full bootstrap and runtime guide: `.agents/skills/project-setup/`.
+Full bootstrap and runtime guide: [`.cursor/skills/project-setup/`](.cursor/skills/project-setup/).
 
 ## Environment variables
 
